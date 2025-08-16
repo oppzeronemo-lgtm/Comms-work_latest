@@ -16,13 +16,16 @@
     :root{
       --headerH:64px;
       --bg:#ffffff; --ink:#0f172a; --muted:#64748b; --line:#e2e8f0;
-      --bar:#4f46e5; --progress:#111827; --done:#16a34a; --ok:#22c55e;
+      /* progress palette requested: ash, beige, red */
+      --ash:#cbd5e1;      /* base / not started */
+      --beige:#f3e8d7;    /* progress */
+      --red:#ef4444;      /* done */
+      --ok:#22c55e;
     }
     *{box-sizing:border-box}
     html,body{height:100%}
     body{margin:0;background:#fff;color:var(--ink);font:14px/1.55 system-ui,-apple-system,Segoe UI,Roboto,Helvetica Neue,Arial}
 
-    /* layout */
     .app{min-height:100vh;display:flex;flex-direction:column}
     header{
       height:var(--headerH);display:flex;align-items:center;justify-content:space-between;
@@ -38,11 +41,9 @@
     select,button{font:inherit;cursor:pointer}
 
     main{flex:1;display:flex;flex-direction:column}
-    /* full-page canvas */
     .canvas{
       flex:1;display:flex;flex-direction:column;gap:10px;
-      padding:14px 16px 16px 16px;
-      height:calc(100vh - var(--headerH));
+      padding:14px 16px 16px 16px;height:calc(100vh - var(--headerH));
     }
     #gantt{
       flex:1;min-height:60vh;border:1px solid var(--line);border-radius:12px;overflow:auto;background:#fff
@@ -55,15 +56,17 @@
 
     .hint{color:var(--muted);font-size:12px}
 
-    /* light theme for Frappe Gantt */
-    .gantt .bar{fill:var(--bar);opacity:.95;transition:opacity .25s ease}
-    .gantt .bar:hover{opacity:1}
-    .gantt .bar-progress{fill:var(--progress);transition:width .6s cubic-bezier(.22,.61,.36,1)}
+    /* Light theme for Gantt and stronger labels */
     .gantt .grid-row{fill:#fff}
     .gantt .grid-row:nth-child(even){fill:#f8fafc}
     .gantt .grid-header rect{fill:#fff}
-    .gantt .lower-text,.gantt .upper-text{fill:#0f172a}
-    .gantt .today-highlight{fill:#f1f5f9}
+    .gantt .lower-text,.gantt .upper-text,.gantt .bar-label,.gantt .bar-text{fill:#0f172a;font-weight:600}
+
+    /* bars: ash base; beige progress; red when 100% */
+    .gantt .bar{fill:var(--ash);opacity:1}
+    .gantt .bar-progress{fill:var(--beige);transition:width .6s cubic-bezier(.22,.61,.36,1)}
+    /* separator line where progress ends */
+    .progress-edge{stroke:#b4a89a;stroke-width:1;shape-rendering:crispEdges}
 
     /* transparent hit area to capture hover anywhere */
     .hover-hit{fill:transparent;pointer-events:all}
@@ -94,9 +97,9 @@
 
         <div class="legend">
           <span class="label">Task progress</span>
-          <span><span class="sw" style="background:#e2e8f0"></span>Not started</span>
-          <span><span class="sw" style="background:#4f46e5"></span>In progress</span>
-          <span><span class="sw" style="background:#16a34a"></span>Done</span>
+          <span><span class="sw" style="background:var(--ash)"></span>Not started</span>
+          <span><span class="sw" style="background:var(--beige)"></span>In progress</span>
+          <span><span class="sw" style="background:var(--red)"></span>Done</span>
         </div>
         <div class="hint">Times show in your device timezone. For Dhaka, set Asia/Dhaka.</div>
       </section>
@@ -116,7 +119,7 @@
     const btnMonth = document.getElementById('viewMonth');
     const refreshBtn = document.getElementById('refreshBtn');
     const ganttEl = document.getElementById('gantt');
-    let gantt;
+    let gantt, lastTasks = [];
 
     init();
 
@@ -129,11 +132,7 @@
       btnMonth.onclick = () => setView('Month');
       refreshBtn.onclick = () => render();
       monthSelect.onchange = () => { state.monthKey = monthSelect.value; render(); };
-      // resize handling so canvas always fills page
-      window.addEventListener('resize', () => {
-        // slight delay to let layout settle
-        setTimeout(() => enhanceBarHover(lastTasksCache), 80);
-      });
+      window.addEventListener('resize', () => setTimeout(() => enhanceBars(lastTasks), 60));
     }
 
     function setView(v){ state.view = v; if(gantt) gantt.change_view_mode(v); }
@@ -170,7 +169,6 @@
       });
     }
 
-    let lastTasksCache = [];
     async function render(){
       const rows = await fetchTasks();
       const tasks = rows.map(r => ({
@@ -183,13 +181,15 @@
         custom_class: statusClass(Number(r.progress || 0)),
         notes: (r.notes ?? r.description ?? '').trim()
       }));
-      lastTasksCache = tasks;
+      lastTasks = tasks;
 
       ganttEl.innerHTML = '';
       gantt = new Gantt('#gantt', tasks, {
         view_mode: state.view,
         date_format: 'YYYY-MM-DD',
         language: 'en',
+        bar_height: 26,
+        padding: 22,
         custom_popup_html: task => `
           <div style="background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 12px;max-width:260px;box-shadow:0 8px 20px rgba(2,6,23,.08)">
             <div style="font-weight:700">${escapeHtml(task.name)}</div>
@@ -198,54 +198,68 @@
           </div>`
       });
 
-      applyBarColors();
-      enhanceBarHover(tasks);
+      enhanceBars(tasks); // color, separator, tooltips, hover popup
     }
 
     function statusClass(p){ if(p>=100) return 'is-done'; if(p>0) return 'is-doing'; return 'is-todo'; }
 
     function subscribeRealtime(){
       supabase.channel('public:tasks')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, debounce(render, 250))
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, debounce(render, 200))
         .subscribe();
     }
 
-    function applyBarColors(){
-      document.querySelectorAll('.gantt .bar-wrapper').forEach(wrap => {
-        const bar = wrap.querySelector('rect.bar');
-        const prog = wrap.querySelector('rect.bar-progress');
-        if(!bar) return;
-        bar.setAttribute('fill', getComputedStyle(document.documentElement).getPropertyValue('--bar').trim());
-        if(prog){
-          const w = parseFloat(prog.getAttribute('width')||'0');
-          const full = parseFloat(bar.getAttribute('width')||'0');
-          const done = full>0 && Math.abs(w-full) < 0.5;
-          prog.setAttribute('fill', done
-            ? getComputedStyle(document.documentElement).getPropertyValue('--done').trim()
-            : getComputedStyle(document.documentElement).getPropertyValue('--progress').trim());
-        }
-      });
-    }
-
-    // hover anywhere on the bar → tooltip + popup
-    function enhanceBarHover(tasks){
+    function enhanceBars(tasks){
       const map = Object.fromEntries(tasks.map(t => [String(t.id), t]));
+
       document.querySelectorAll('.gantt .bar-wrapper').forEach(wrap => {
         const id = wrap.getAttribute('data-id');
         const bar = wrap.querySelector('rect.bar');
+        const prog = wrap.querySelector('rect.bar-progress');
         if(!bar) return;
 
+        // base / progress colors
+        bar.setAttribute('fill', getComputedStyle(document.documentElement).getPropertyValue('--ash').trim());
+
+        if(prog){
+          const barW  = parseFloat(bar.getAttribute('width')||'0');
+          const progW = parseFloat(prog.getAttribute('width')||'0');
+          const done = barW>0 && Math.abs(barW - progW) < 0.5;
+          prog.setAttribute('fill', done
+            ? getComputedStyle(document.documentElement).getPropertyValue('--red').trim()
+            : getComputedStyle(document.documentElement).getPropertyValue('--beige').trim());
+
+          // draw / update separator line at progress edge
+          let edge = wrap.querySelector('line.progress-edge');
+          if(!edge){
+            edge = document.createElementNS('http://www.w3.org/2000/svg','line');
+            edge.setAttribute('class','progress-edge');
+            wrap.appendChild(edge);
+          }
+          const x = parseFloat(bar.getAttribute('x')||'0') + progW;
+          const y = parseFloat(bar.getAttribute('y')||'0');
+          const h = parseFloat(bar.getAttribute('height')||'0');
+          edge.setAttribute('x1', x); edge.setAttribute('x2', x);
+          edge.setAttribute('y1', y+1); edge.setAttribute('y2', y+h-1);
+          edge.style.display = (progW>0 && !done) ? 'block' : 'none';
+        }
+
+        // stronger text label on the bar (Frappe adds it for us; we just ensure contrast via CSS above)
+
+        // hover hit area covering whole bar + tooltip + popup
         let hit = wrap.querySelector('rect.hover-hit');
         if(!hit){
           hit = document.createElementNS('http://www.w3.org/2000/svg','rect');
           hit.setAttribute('class','hover-hit');
           wrap.appendChild(hit);
         }
-        ['x','y','width','height','rx','ry'].forEach(attr=>{
-          const v = bar.getAttribute(attr); if(v!=null) hit.setAttribute(attr, v);
+        ['x','y','width','height','rx','ry'].forEach(a=>{
+          const v = bar.getAttribute(a); if(v!=null) hit.setAttribute(a, v);
         });
 
-        const t = map[id]; const tip = t ? `${t.name}${t.notes ? ' — ' + t.notes : ''}` : '';
+        // tooltip text (title + notes)
+        const t = map[id];
+        const tip = t ? `${t.name}${t.notes ? ' — ' + t.notes : ''}` : '';
         let old = hit.querySelector('title'); if(old) old.remove();
         const title = document.createElementNS('http://www.w3.org/2000/svg','title');
         title.textContent = tip; hit.appendChild(title);
