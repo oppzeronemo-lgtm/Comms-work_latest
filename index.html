@@ -16,11 +16,11 @@
     :root{
       --headerH:64px;
       --bg:#ffffff; --ink:#0f172a; --muted:#64748b; --line:#e2e8f0;
-      /* progress palette requested: ash, beige, red */
-      --ash:#cbd5e1;      /* base / not started */
-      --beige:#f3e8d7;    /* progress */
-      --red:#ef4444;      /* done */
-      --ok:#22c55e;
+      /* requested palette: ash (base), beige (progress), red (100%) */
+      --ash:#cbd5e1;
+      --beige:#f3e8d7;
+      --red:#ef4444;
+      --live:#22c55e;
     }
     *{box-sizing:border-box}
     html,body{height:100%}
@@ -34,7 +34,7 @@
     .brand{display:flex;gap:10px;align-items:center}
     .title{font-weight:700}
     .subtitle{color:var(--muted);font-size:12px;margin-top:2px}
-    .live{width:10px;height:10px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 6px rgba(34,197,94,.15);animation:pulse 1.8s infinite}
+    .live{width:10px;height:10px;border-radius:50%;background:var(--live);box-shadow:0 0 0 6px rgba(34,197,94,.15);animation:pulse 1.8s infinite}
     @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(34,197,94,.4)}70%{box-shadow:0 0 0 14px rgba(34,197,94,0)}100%{box-shadow:0 0 0 0 rgba(34,197,94,0)}}
     .controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
     .controls>*{background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px 12px}
@@ -53,22 +53,21 @@
     .legend{display:flex;gap:18px;align-items:center;flex-wrap:wrap;color:var(--muted);font-size:12px}
     .legend .label{font-weight:600;color:var(--ink)}
     .sw{width:12px;height:12px;border-radius:3px;display:inline-block;margin-right:6px;border:1px solid var(--line)}
-
     .hint{color:var(--muted);font-size:12px}
 
-    /* Light theme for Gantt and stronger labels */
+    /* Gantt light theme + stronger bar labels */
     .gantt .grid-row{fill:#fff}
     .gantt .grid-row:nth-child(even){fill:#f8fafc}
     .gantt .grid-header rect{fill:#fff}
     .gantt .lower-text,.gantt .upper-text,.gantt .bar-label,.gantt .bar-text{fill:#0f172a;font-weight:600}
 
-    /* bars: ash base; beige progress; red when 100% */
+    /* base ash bar + beige progress + transition; red when 100% */
     .gantt .bar{fill:var(--ash);opacity:1}
     .gantt .bar-progress{fill:var(--beige);transition:width .6s cubic-bezier(.22,.61,.36,1)}
-    /* separator line where progress ends */
+    /* crisp separator line at progress edge */
     .progress-edge{stroke:#b4a89a;stroke-width:1;shape-rendering:crispEdges}
 
-    /* transparent hit area to capture hover anywhere */
+    /* capture hover anywhere */
     .hover-hit{fill:transparent;pointer-events:all}
   </style>
 </head>
@@ -99,7 +98,7 @@
           <span class="label">Task progress</span>
           <span><span class="sw" style="background:var(--ash)"></span>Not started</span>
           <span><span class="sw" style="background:var(--beige)"></span>In progress</span>
-          <span><span class="sw" style="background:var(--red)"></span>Done</span>
+          <span><span class="sw" style="background:var(--red)"></span>Done (100%)</span>
         </div>
         <div class="hint">Times show in your device timezone. For Dhaka, set Asia/Dhaka.</div>
       </section>
@@ -198,9 +197,10 @@
           </div>`
       });
 
-      enhanceBars(tasks); // color, separator, tooltips, hover popup
+      enhanceBars(tasks); // colors, separator, labels, tooltips, hover popup
     }
 
+    // 0 → ash, 1–99 → beige overlay, 100 → red
     function statusClass(p){ if(p>=100) return 'is-done'; if(p>0) return 'is-doing'; return 'is-todo'; }
 
     function subscribeRealtime(){
@@ -218,18 +218,20 @@
         const prog = wrap.querySelector('rect.bar-progress');
         if(!bar) return;
 
-        // base / progress colors
+        // base ash
         bar.setAttribute('fill', getComputedStyle(document.documentElement).getPropertyValue('--ash').trim());
 
         if(prog){
           const barW  = parseFloat(bar.getAttribute('width')||'0');
           const progW = parseFloat(prog.getAttribute('width')||'0');
           const done = barW>0 && Math.abs(barW - progW) < 0.5;
+
+          // beige progress or red when done
           prog.setAttribute('fill', done
             ? getComputedStyle(document.documentElement).getPropertyValue('--red').trim()
             : getComputedStyle(document.documentElement).getPropertyValue('--beige').trim());
 
-          // draw / update separator line at progress edge
+          // progress edge (separator)
           let edge = wrap.querySelector('line.progress-edge');
           if(!edge){
             edge = document.createElementNS('http://www.w3.org/2000/svg','line');
@@ -244,9 +246,7 @@
           edge.style.display = (progW>0 && !done) ? 'block' : 'none';
         }
 
-        // stronger text label on the bar (Frappe adds it for us; we just ensure contrast via CSS above)
-
-        // hover hit area covering whole bar + tooltip + popup
+        // full-bar hover: tooltip + popup
         let hit = wrap.querySelector('rect.hover-hit');
         if(!hit){
           hit = document.createElementNS('http://www.w3.org/2000/svg','rect');
@@ -257,7 +257,6 @@
           const v = bar.getAttribute(a); if(v!=null) hit.setAttribute(a, v);
         });
 
-        // tooltip text (title + notes)
         const t = map[id];
         const tip = t ? `${t.name}${t.notes ? ' — ' + t.notes : ''}` : '';
         let old = hit.querySelector('title'); if(old) old.remove();
