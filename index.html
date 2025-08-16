@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>UDP Programme Comms Dashboard</title>
 
-  <!-- Frappe Gantt (MIT) -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/frappe-gantt/dist/frappe-gantt.css" />
-  <script src="https://cdn.jsdelivr.net/npm/frappe-gantt/dist/frappe-gantt.min.js"></script>
+  <!-- Frappe Gantt (browser-ready build) -->
+  <link rel="stylesheet" href="https://unpkg.com/frappe-gantt@0.6.1/dist/frappe-gantt.css" />
+  <script src="https://unpkg.com/frappe-gantt@0.6.1/dist/frappe-gantt.min.js"></script>
 
   <!-- Supabase JS v2 -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -23,22 +23,20 @@
       --warn: #f59e0b;
     }
     html,body{height:100%}
-    body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji"; }
-    .wrap { max-width: 1100px; margin: 24px auto; padding: 0 16px; }
-    .topbar { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
-    .brand { display:flex; gap:10px; align-items:center; }
-    .live-dot { width:10px; height:10px; border-radius:50%; background: var(--ok); box-shadow: 0 0 0 6px rgba(34,197,94,.15); animation: pulse 1.8s infinite; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial }
+    .wrap { max-width: 1100px; margin: 24px auto; padding: 0 16px }
+    .topbar { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap }
+    .brand { display:flex; gap:10px; align-items:center }
+    .live-dot { width:10px; height:10px; border-radius:50%; background: var(--ok); box-shadow: 0 0 0 6px rgba(34,197,94,.15); animation: pulse 1.8s infinite }
     @keyframes pulse { 0%{box-shadow:0 0 0 0 rgba(34,197,94,.5)} 70%{box-shadow:0 0 0 10px rgba(34,197,94,0)} 100%{box-shadow:0 0 0 0 rgba(34,197,94,0)} }
-    .card { background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,0)); border: 1px solid rgba(255,255,255,.08); border-radius: 16px; padding: 14px; }
-    .controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-    .controls > * { background: var(--card); color: var(--text); border: 1px solid rgba(255,255,255,.1); border-radius: 12px; padding: 10px 12px; }
+    .card { background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,0)); border: 1px solid rgba(255,255,255,.08); border-radius: 16px; padding: 14px }
+    .controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap }
+    .controls > * { background: var(--card); color: var(--text); border: 1px solid rgba(255,255,255,.1); border-radius: 12px; padding: 10px 12px }
     select,button,input{ font: inherit }
-    .hint { color: var(--muted); font-size: 12px; }
-    #gantt { overflow: auto; background: var(--card); border: 1px solid rgba(255,255,255,.08); border-radius: 16px; }
-
+    .hint { color: var(--muted); font-size: 12px }
+    #gantt { overflow: auto; background: var(--card); border: 1px solid rgba(255,255,255,.08); border-radius: 16px }
     .legend { display:flex; gap:16px; align-items:center; flex-wrap:wrap; color: var(--muted); font-size:12px; margin-top:8px }
-    .legend .sw { width:10px; height:10px; border-radius:3px; display:inline-block; margin-right:6px; }
-
+    .legend .sw { width:10px; height:10px; border-radius:3px; display:inline-block; margin-right:6px }
     .details-card { background:#0f1218; border:1px solid rgba(255,255,255,.1); padding:10px 12px; border-radius:10px }
   </style>
 </head>
@@ -73,15 +71,13 @@
   </div>
 
   <script>
-    // ---- Supabase credentials (your values) ----
+    // your Supabase credentials
     const SUPABASE_URL = "https://wjfgntocqjtwaqamlbgc.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndqZmdudG9jcWp0d2FxYW1sYmdjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUzNjQzODIsImV4cCI6MjA3MDk0MDM4Mn0.IRwC5-0cv2rkaZbzR1Ovxnt6dl0m1IwJgcLl2I67YzQ";
-    // -------------------------------------------
 
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     const state = { view: 'Week', monthKey: keyFromDate(new Date()) };
-
     const monthSelect = document.getElementById('monthSelect');
     const btnDay = document.getElementById('viewDay');
     const btnWeek = document.getElementById('viewWeek');
@@ -142,7 +138,7 @@
       return (data || []).filter(t => {
         const s = new Date(t.start_date);
         const e = new Date(t.end_date || t.start_date);
-        return e >= start && s <= end; // overlaps month
+        return e >= start && s <= end;
       });
     }
 
@@ -179,7 +175,7 @@
         }
       });
 
-      // add hover tooltips with notes (for quick glance)
+      // hover tooltips with notes
       setHoverTooltips(tasks);
     }
 
@@ -224,9 +220,9 @@
   </script>
 
   <style>
-    .gantt .bar.is-done { opacity: .8; }
-    .gantt .bar.is-doing { filter: saturate(1.2); }
-    .gantt .bar.is-todo { opacity: .9; }
+    .gantt .bar.is-done { opacity: .8 }
+    .gantt .bar.is-doing { filter: saturate(1.2) }
+    .gantt .bar.is-todo { opacity: .9 }
   </style>
 </body>
 </html>
