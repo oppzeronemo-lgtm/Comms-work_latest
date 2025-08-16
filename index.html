@@ -14,35 +14,88 @@
 
   <style>
     :root{
-      --bg:#0b0c10;--card:#111318;--muted:#9aa4b2;--text:#e8eef7;--ok:#22c55e
+      --bg:#ffffff;          /* page background */
+      --ink:#0f172a;         /* main text */
+      --muted:#64748b;       /* secondary text */
+      --line:#e2e8f0;        /* borders */
+      --brand:#111827;       /* header text */
+      --bar:#4f46e5;         /* bar color (indigo 600) */
+      --progress:#111827;    /* progress overlay (near-black) */
+      --done:#16a34a;        /* green */
+      --warn:#f59e0b;        /* amber */
+      --ok:#22c55e;          /* live dot */
+      --card:#ffffff;        /* card bg */
+      --shadow:0 8px 24px rgba(2,6,23,.06);
     }
+    *{box-sizing:border-box}
     html,body{height:100%}
-    body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Helvetica Neue,Arial}
-    .wrap{max-width:1100px;margin:24px auto;padding:0 16px}
-    .topbar{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+    body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.55 system-ui,-apple-system,Segoe UI,Roboto,Helvetica Neue,Arial}
+    .app{display:flex;flex-direction:column;min-height:100vh}
+    .topbar{
+      position:sticky;top:0;z-index:10;background:var(--bg);
+      border-bottom:1px solid var(--line);
+      display:flex;gap:16px;align-items:center;justify-content:space-between;
+      padding:14px 20px
+    }
     .brand{display:flex;gap:10px;align-items:center}
-    .live-dot{width:10px;height:10px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 6px rgba(34,197,94,.15);animation:pulse 1.8s infinite}
-    @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(34,197,94,.5)}70%{box-shadow:0 0 0 10px rgba(34,197,94,0)}100%{box-shadow:0 0 0 0 rgba(34,197,94,0)}}
-    .card{background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,0));border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:14px}
+    .live-dot{width:10px;height:10px;border-radius:50%;background:var(--ok);
+      box-shadow:0 0 0 6px rgba(34,197,94,.15); animation:pulse 1.8s infinite}
+    @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(34,197,94,.45)}70%{box-shadow:0 0 0 14px rgba(34,197,94,0)}100%{box-shadow:0 0 0 0 rgba(34,197,94,0)}}
+    .title{font-weight:700;color:var(--brand)}
+    .subtitle{color:var(--muted);font-size:12px;margin-top:2px}
     .controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-    .controls>*{background:#111318;color:var(--text);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:10px 12px}
-    .hint{color:var(--muted);font-size:12px}
-    #gantt{overflow:auto;background:#111318;border:1px solid rgba(255,255,255,.08);border-radius:16px}
-    .legend{display:flex;gap:16px;align-items:center;flex-wrap:wrap;color:var(--muted);font-size:12px;margin-top:8px}
-    .legend .sw{width:10px;height:10px;border-radius:3px;display:inline-block;margin-right:6px}
-    .details-card{background:#0f1218;border:1px solid rgba(255,255,255,.1);padding:10px 12px;border-radius:10px;max-width:260px}
-    /* transparent hit area that captures hover anywhere on the bar */
-    .hover-hit{fill:transparent;pointer-events:all}
+    .controls>*{
+      background:#fff;color:var(--ink);border:1px solid var(--line);
+      border-radius:10px;padding:8px 12px;box-shadow:var(--shadow)
+    }
+    select,button{font:inherit;cursor:pointer}
+    main{flex:1;display:flex}
+    .card{
+      width:100%;max-width:1200px;margin:18px auto;padding:16px;border:1px solid var(--line);
+      border-radius:14px;background:var(--card);box-shadow:var(--shadow);
+      display:flex;flex-direction:column;min-height:calc(100vh - 120px)
+    }
+    #gantt{flex:1;min-height:420px;border:1px solid var(--line);border-radius:12px;overflow:auto}
+    .legend{
+      display:flex;gap:18px;align-items:center;flex-wrap:wrap;
+      color:var(--muted);font-size:12px;margin-top:10px
+    }
+    .legend .label{font-weight:600;color:var(--ink);margin-right:6px}
+    .sw{width:12px;height:12px;border-radius:3px;display:inline-block;margin-right:6px;border:1px solid var(--line)}
+    .hint{color:var(--muted);font-size:12px;margin-top:6px}
+
+    /* Light theme for Gantt bars */
+    .gantt .bar{fill:var(--bar); opacity:.95; transition:opacity .25s ease}
+    .gantt .bar:hover{opacity:1}
+    .gantt .bar-progress{fill:var(--progress)}
+    .gantt .lower-text,.gantt .upper-text{fill:#0f172a}
+    .gantt .grid-row{fill:#fff}
+    .gantt .grid-row:nth-child(even){fill:#f8fafc}
+    .gantt .grid-header{fill:#fff}
+    .gantt .grid-header rect{fill:#fff}
+    .gantt .today-highlight{fill:#f1f5f9}
+
+    /* Smooth width resize for progress rectangles (SVG supports this in modern browsers) */
+    .gantt .bar-progress{transition:width .6s cubic-bezier(.22,.61,.36,1)}
+
+    /* Loading shimmer */
+    .skeleton{position:relative;overflow:hidden;border-radius:12px;background:#f1f5f9;border:1px solid var(--line);height:260px}
+    .skeleton::after{
+      content:"";position:absolute;inset:0;transform:translateX(-100%);
+      background:linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,.6) 50%, rgba(255,255,255,0) 100%);
+      animation:shimmer 1.3s infinite
+    }
+    @keyframes shimmer{100%{transform:translateX(100%)}}
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <div class="topbar">
+  <div class="app">
+    <header class="topbar">
       <div class="brand">
-        <div class="live-dot" title="Realtime connected"></div>
+        <div class="live-dot" title="Realtime"></div>
         <div>
-          <div style="font-weight:600">UDP Programme Comms Dashboard</div>
-          <div class="hint">Comms Focal: Abu Nayeem Md Shakib</div>
+          <div class="title">UDP Programme Comms Dashboard</div>
+          <div class="subtitle">Comms Focal: Abu Nayeem Md Shakib</div>
         </div>
       </div>
       <div class="controls">
@@ -52,17 +105,22 @@
         <button id="viewMonth">Month</button>
         <button id="refreshBtn" title="Force refresh">Refresh</button>
       </div>
-    </div>
+    </header>
 
-    <div class="card" style="margin-top:12px">
-      <div id="gantt"></div>
-      <div class="legend">
-        <span><span class="sw" style="background:#4f46e5"></span>Task</span>
-        <span><span class="sw" style="background:#22c55e"></span>Done</span>
-        <span><span class="sw" style="background:#f59e0b"></span>In progress</span>
-      </div>
-      <div class="hint" style="margin-top:8px">Times show in your device timezone. For Dhaka, set Asia/Dhaka.</div>
-    </div>
+    <main>
+      <section class="card">
+        <div id="ganttSkeleton" class="skeleton"></div>
+        <div id="gantt" style="display:none"></div>
+
+        <div class="legend">
+          <span class="label">Task progress</span>
+          <span><span class="sw" style="background:#e2e8f0"></span>Not started</span>
+          <span><span class="sw" style="background:#4f46e5"></span>In progress</span>
+          <span><span class="sw" style="background:#16a34a"></span>Done</span>
+        </div>
+        <div class="hint">Times show in your device timezone. For Dhaka, set Asia/Dhaka.</div>
+      </section>
+    </main>
   </div>
 
   <script>
@@ -78,20 +136,21 @@
     const btnMonth = document.getElementById('viewMonth');
     const refreshBtn = document.getElementById('refreshBtn');
     const ganttEl = document.getElementById('gantt');
+    const skeleton = document.getElementById('ganttSkeleton');
     let gantt;
 
     init();
 
     async function init(){
       buildMonthPicker();
-      await render();
-      subscribeRealtime();
+      await render();               // first paint
+      subscribeRealtime();          // live updates
       hookControls();
     }
 
     function hookControls(){
-      btnDay.onclick = () => setView('Day');
-      btnWeek.onclick = () => setView('Week');
+      btnDay.onclick   = () => setView('Day');
+      btnWeek.onclick  = () => setView('Week');
       btnMonth.onclick = () => setView('Month');
       refreshBtn.onclick = () => render();
       monthSelect.onchange = () => { state.monthKey = monthSelect.value; render(); };
@@ -123,10 +182,7 @@
     }
 
     async function fetchTasks(){
-      const { data, error } = await supabase
-        .from('tasks')
-        .select('*')
-        .order('start_date', { ascending: true });
+      const { data, error } = await supabase.from('tasks').select('*').order('start_date', { ascending: true });
       if(error){ console.error(error); return []; }
       const { start, end } = monthRangeFromKey(state.monthKey);
       return (data || []).filter(t => {
@@ -137,6 +193,10 @@
     }
 
     async function render(){
+      // show skeleton while loading
+      skeleton.style.display = 'block';
+      ganttEl.style.display = 'none';
+
       const rows = await fetchTasks();
       const tasks = rows.map(r => ({
         id: r.id,
@@ -149,13 +209,8 @@
         notes: (r.notes ?? r.description ?? '').trim()
       }));
 
+      // draw
       ganttEl.innerHTML = '';
-      if(!tasks.length){
-        ganttEl.innerHTML = "<div class='hint' style='padding:10px'>No tasks found for this month.</div>";
-        return;
-      }
-
-      // draw the gantt with a custom popup
       gantt = new Gantt('#gantt', tasks, {
         view_mode: state.view,
         date_format: 'YYYY-MM-DD',
@@ -163,89 +218,97 @@
         custom_popup_html: task => {
           return `
             <div class="details-card">
-              <div style="font-weight:600">${escapeHtml(task.name)}</div>
-              <div class="hint">${task._start.format('ll')} → ${task._end.format('ll')} · ${task.progress}%</div>
-              <div style="margin-top:6px;font-size:12px;color:#cbd5e1">${escapeHtml(task.notes || 'No description')}</div>
+              <div style="font-weight:700">${escapeHtml(task.name)}</div>
+              <div style="color:#64748b;font-size:12px">${task._start.format('ll')} → ${task._end.format('ll')} · ${task.progress}%</div>
+              <div style="margin-top:6px;font-size:12px;color:#0f172a">${escapeHtml(task.notes || 'No description')}</div>
             </div>`;
         }
       });
 
-      // enhance hover so ANYWHERE on the bar works (purple + gray + edges)
+      // style tweaks for light theme + progress colors
+      paintBars();
+
+      // hover works anywhere on the bar & shows tooltip + popup
       enhanceBarHover(tasks);
+
+      // reveal chart
+      skeleton.style.display = 'none';
+      ganttEl.style.display = 'block';
     }
 
     function statusClass(p){
-      const done = p >= 100, doing = p > 0 && p < 100;
-      return done ? 'is-done' : doing ? 'is-doing' : 'is-todo';
+      if (p >= 100) return 'is-done';
+      if (p > 0) return 'is-doing';
+      return 'is-todo';
     }
 
     function subscribeRealtime(){
       supabase.channel('public:tasks')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, debounce(render, 300))
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, debounce(render, 250))
         .subscribe();
     }
 
-    // --------------------------------------------------------------------
-    // Make hover work anywhere by inserting an invisible hit-rectangle
-    // above each bar and wiring both native <title> and popup handlers.
+    // make bars match our legend & animate nicely
+    function paintBars(){
+      document.querySelectorAll('.gantt .bar-wrapper').forEach(wrap => {
+        const bar = wrap.querySelector('rect.bar');
+        const prog = wrap.querySelector('rect.bar-progress');
+        if(!bar) return;
+        // default bar color
+        bar.setAttribute('fill', getComputedStyle(document.documentElement).getPropertyValue('--bar').trim());
+        if(prog){
+          // if 100% -> green, else near-black overlay
+          const width = parseFloat(prog.getAttribute('width')||'0');
+          const full  = parseFloat(bar.getAttribute('width')||'0');
+          const done = full>0 && Math.abs(width-full) < 0.5;
+          prog.setAttribute('fill', done ? getComputedStyle(document.documentElement).getPropertyValue('--done').trim()
+                                         : getComputedStyle(document.documentElement).getPropertyValue('--progress').trim());
+          prog.style.transition = 'width .6s cubic-bezier(.22,.61,.36,1)';
+        }
+      });
+    }
+
+    // Hover anywhere on bar → tooltip + popup
     function enhanceBarHover(tasks){
       const map = Object.fromEntries(tasks.map(t => [String(t.id), t]));
       document.querySelectorAll('.gantt .bar-wrapper').forEach(wrap => {
         const id = wrap.getAttribute('data-id');
         const bar = wrap.querySelector('rect.bar');
-        if(!bar) return;
+        const prog = wrap.querySelector('rect.bar-progress');
 
-        // 1) Ensure both main bar and progress rects get SVG <title>
-        const progress = wrap.querySelector('rect.bar-progress');
-        [bar, progress].filter(Boolean).forEach(rect => {
-          let t = rect.querySelector('title');
-          if(t) t.remove();
-          const task = map[id];
-          const hover = task ? `${task.name}${task.notes ? ' — ' + task.notes : ''}` : '';
-          const titleEl = document.createElementNS('http://www.w3.org/2000/svg','title');
-          titleEl.textContent = hover;
-          rect.appendChild(titleEl);
-        });
-
-        // 2) Add or update a transparent overlay to catch hover anywhere
+        // add / update hit overlay
         let hit = wrap.querySelector('rect.hover-hit');
         if(!hit){
           hit = document.createElementNS('http://www.w3.org/2000/svg','rect');
           hit.setAttribute('class','hover-hit');
-          wrap.appendChild(hit); // on top
+          wrap.appendChild(hit);
         }
-        // copy bar geometry
+        // copy geometry from main bar
         ['x','y','width','height','rx','ry'].forEach(attr=>{
           const v = bar.getAttribute(attr);
           if(v!=null) hit.setAttribute(attr, v);
         });
 
-        // 3) Native tooltip also on the overlay
-        let t2 = hit.querySelector('title');
-        if(t2) t2.remove();
-        const task = map[id];
-        const txt = task ? `${task.name}${task.notes ? ' — ' + task.notes : ''}` : '';
-        const title2 = document.createElementNS('http://www.w3.org/2000/svg','title');
-        title2.textContent = txt;
-        hit.appendChild(title2);
+        // tooltip text (title + notes)
+        const t = map[id];
+        const tip = t ? `${t.name}${t.notes ? ' — ' + t.notes : ''}` : '';
+        let old = hit.querySelector('title'); if(old) old.remove();
+        const title = document.createElementNS('http://www.w3.org/2000/svg','title');
+        title.textContent = tip;
+        hit.appendChild(title);
 
-        // 4) Popup on hover in/out
+        // open popup on hover, close on leave
         hit.addEventListener('mouseenter', () => {
-          if(gantt && typeof gantt.show_popup === 'function') {
-            gantt.show_popup(task);
-          } else {
-            wrap.dispatchEvent(new MouseEvent('click', { bubbles:true }));
-          }
+          if(gantt && typeof gantt.show_popup === 'function') gantt.show_popup(t);
+          else wrap.dispatchEvent(new MouseEvent('click', { bubbles:true }));
         });
         hit.addEventListener('mouseleave', () => {
-          if(gantt && typeof gantt.hide_popup === 'function') {
-            gantt.hide_popup();
-          }
+          if(gantt && typeof gantt.hide_popup === 'function') gantt.hide_popup();
         });
       });
     }
-    // --------------------------------------------------------------------
 
+    // utils
     function formatDate(d){
       const x = new Date(d);
       const yyyy = x.getFullYear();
@@ -253,20 +316,15 @@
       const dd = String(x.getDate()).padStart(2,'0');
       return `${yyyy}-${mm}-${dd}`;
     }
-
-    function debounce(fn, wait){
-      let t; return (...args)=>{ clearTimeout(t); t=setTimeout(()=>fn.apply(this,args),wait); };
-    }
-
-    function escapeHtml(s){
-      return String(s).replace(/[&<>\"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#039;'}[c]));
-    }
+    function debounce(fn, wait){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn.apply(this,a), wait); }; }
+    function escapeHtml(s){ return String(s).replace(/[&<>\"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#039;'}[c])); }
   </script>
 
   <style>
-    .gantt .bar.is-done{opacity:.8}
-    .gantt .bar.is-doing{filter:saturate(1.2)}
-    .gantt .bar.is-todo{opacity:.9}
+    /* status classes -> match legend semantics */
+    .gantt .bar.is-todo{opacity:.85}
+    .gantt .bar.is-doing{opacity:.95}
+    .gantt .bar.is-done{opacity:1; filter:saturate(1.1)}
   </style>
 </body>
 </html>
