@@ -4,226 +4,266 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>UDP Programme Comms Dashboard</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='46' fill='%23cc0000'/%3E%3Ctext x='50' y='60' text-anchor='middle' font-size='52' fill='white' font-family='Arial, sans-serif'%3EU%3C/text%3E%3C/svg%3E" />
+
+  <!-- Frappe Gantt -->
   <link rel="stylesheet" href="https://unpkg.com/frappe-gantt@0.6.1/dist/frappe-gantt.css" />
   <script src="https://unpkg.com/frappe-gantt@0.6.1/dist/frappe-gantt.min.js"></script>
+
+  <!-- Supabase -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
   <style>
-    :root {
-      --page: #ffffff;
-      --card: #f8f7f4;
-      --ink: #202124;
-      --muted: #6b7280;
-      --accent: #1f2937;
-      --pending0: #FFE7C2;
-      --doing-base: #EDE8D0;
-      --done: #008000;
-      --done-base: #E8F5EA;
+    :root{
+      --page:#ffffff; --ink:#202124; --muted:#6b7280; --border:#e5e7eb; --chip:#eef2f7;
+      --pending:#FFD8A8;   /* 0% */
+      --doing:#EDE8D0;     /* in-progress base */
+      --done:#008000;      /* 100% */
+      --done-base:#E8F5EA; /* base for completed */
     }
 
-    html, body { height: 100%; margin:0; padding:0; }
-    body { background: var(--page); color: var(--ink); font: 15px/1.5 Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial; overflow:hidden }
-    .wrap { width: 100%; padding: 16px; box-sizing:border-box; height:100%; display:flex; flex-direction:column; }
+    html,body{height:100%}
+    body{
+      margin:0; background:var(--page); color:var(--ink);
+      font:15px/1.5 Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      display:flex; flex-direction:column;
+    }
 
-    .topbar { display:flex; gap:12px; align-items:center; justify-content:space-between; flex-wrap:wrap; margin: 6px 8px 14px; }
-    .brand { display:flex; gap:10px; align-items:center; }
-    .live-dot { width:10px; height:10px; border-radius:50%; background:#cc0000; animation:pulse 1.8s infinite; }
-    @keyframes pulse { 0%{transform:scale(.9)} 50%{transform:scale(1.25)} 100%{transform:scale(.9)} }
+    .topbar{
+      display:flex; gap:12px; align-items:center; justify-content:space-between; flex-wrap:wrap;
+      padding:14px 16px; border-bottom:1px solid var(--border);
+    }
+    .brand{display:flex; gap:10px; align-items:center}
+    .dot{width:10px; height:10px; border-radius:50%; background:#cc0000}
+    .title{font-weight:700; font-size:18px}
+    .hint{color:var(--muted); font-size:12px}
+    .controls{display:flex; gap:8px; flex-wrap:wrap}
+    .controls>*{background:var(--chip); border:1px solid var(--border); border-radius:12px; padding:8px 12px; cursor:pointer}
 
-    .card { background: var(--card); border: 1px solid rgba(0,0,0,.05); border-radius: 16px; padding: 16px; box-shadow: 0 2px 10px rgba(0,0,0,.05); flex:1; display:flex; flex-direction:column; min-height:0; }
-    .controls{ display:flex; gap:8px; flex-wrap:wrap }
-    .controls>*{ background:#fff; color:var(--ink); border:1px solid #e5e7eb; border-radius:12px; padding:8px 12px; cursor:pointer }
+    /* main stage */
+    #stage{flex:1 1 auto; min-height:0; padding:12px}
+    #gantt{
+      height:100%; width:100%;
+      background:#fff; border:1px solid var(--border); border-radius:12px;
+      overflow:auto;              /* allow horizontal scroll if needed */
+    }
 
-    #gantt { flex:1; background:#fff; border:1px solid #e5e7eb; border-radius:12px; min-height:400px; overflow:auto }
+    /* legend */
+    .legend{display:flex; gap:18px; align-items:center; color:var(--muted); font-size:13px; padding:10px 14px}
+    .sw{width:14px; height:14px; border-radius:3px; display:inline-block; margin-right:6px; border:1px solid #d1d5db}
+    .sw.pending{background:var(--pending)}
+    .sw.doing{background:var(--doing)}
+    .sw.done{background:var(--done)}
 
-    .legend{ display:flex; gap:18px; align-items:center; color:var(--muted); font-size:13px; margin:10px 6px }
-    .sw{ width:12px; height:12px; border-radius:3px; display:inline-block; margin-right:6px; border:1px solid #d1d5db }
-    .sw.pending{ background: var(--pending0) }
-    .sw.doing{ background: var(--doing-base) }
-    .sw.done{ background: var(--done) }
+    /* bar aesthetics */
+    #gantt svg .bar{stroke-width:.2; cursor:pointer}
+    .gantt .bar-label{stroke:none; font-weight:600; fill:#374151; font-size:12px}
 
-    #gantt svg .bar{ stroke-width:.10; cursor:pointer }
-    .gantt .bar-label{ stroke:none; font-weight:500; fill:#374151; font-size:12px }
+    /* set base fills via classes (we still recolor progress below) */
+    .gantt .bar-wrapper.is-todo  .bar{fill:var(--pending)!important}
+    .gantt .bar-wrapper.is-doing .bar{fill:var(--doing)!important}
+    .gantt .bar-wrapper.is-done  .bar{fill:var(--done-base)!important}
 
-    .gantt .bar-wrapper.is-todo  .bar{ fill: var(--pending0) !important; }
-    .gantt .bar-wrapper.is-doing .bar{ fill: var(--doing-base) !important; }
-    .gantt .bar-wrapper.is-done  .bar{ fill: var(--done-base) !important; }
+    /* tooltip */
+    .tooltip{
+      position:absolute; background:#fff; border:1px solid var(--border);
+      padding:8px 10px; border-radius:8px; box-shadow:0 10px 28px rgba(0,0,0,.12);
+      font-size:13px; display:none; pointer-events:none; z-index:9999; max-width:340px
+    }
 
-    .gantt .bar-progress{ fill: rgba(0,0,0,.06) }
-
-    .tooltip{ position:absolute; background:#fff; border:1px solid #e5e7eb; padding:8px 10px; border-radius:8px; box-shadow:0 10px 28px rgba(0,0,0,.12); font-size:13px; display:none; pointer-events:none; z-index:9999; max-width:320px }
+    /* soft error strip */
+    .err{margin:8px 16px; color:#b00020; font-size:13px; display:none}
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <div class="topbar">
-      <div class="brand">
-        <div class="live-dot" title="Realtime"></div>
-        <div>
-          <div style="font-weight:700;font-size:20px">UDP Programme Comms Dashboard</div>
-          <div style="color:var(--muted);font-size:12px">Comms Focal: Abu Nayeem Md Shakib</div>
-        </div>
-      </div>
-      <div class="controls">
-        <select id="monthSelect"></select>
-        <button id="viewDay">Day</button>
-        <button id="viewWeek">Week</button>
-        <button id="viewMonth">Month</button>
-        <button id="refreshBtn">Refresh</button>
+  <div class="topbar">
+    <div class="brand">
+      <div class="dot" title="Realtime"></div>
+      <div>
+        <div class="title">UDP Programme Comms Dashboard</div>
+        <div class="hint">Comms Focal: Abu Nayeem Md Shakib</div>
       </div>
     </div>
-
-    <div class="card">
-      <div id="gantt"></div>
-      <div class="legend">
-        <span><span class="sw pending"></span>Pending (0%)</span>
-        <span><span class="sw doing"></span>In progress</span>
-        <span><span class="sw done"></span>Completed</span>
-      </div>
-      <div style="color:var(--muted);font-size:12px;margin:6px">Hover or tap a bar to see details. Times show in your timezone.</div>
+    <div class="controls">
+      <select id="monthSelect"></select>
+      <button id="viewDay">Day</button>
+      <button id="viewWeek">Week</button>
+      <button id="viewMonth">Month</button>
+      <button id="refreshBtn">Refresh</button>
     </div>
   </div>
 
-  <div class="tooltip" id="tooltip"></div>
+  <div id="stage"><div id="gantt"></div></div>
+
+  <div class="legend">
+    <span><span class="sw pending"></span>Pending (0%)</span>
+    <span><span class="sw doing"></span>In progress</span>
+    <span><span class="sw done"></span>Completed (100%)</span>
+  </div>
+  <div id="err" class="err"></div>
+
+  <div id="tooltip" class="tooltip"></div>
 
   <script>
+    // === Supabase config (yours) ===
     const SUPABASE_URL = "https://wjfgntocqjtwaqamlbgc.supabase.co";
-    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndqZmdudG9jcWp0d2FxYW1sYmdjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUzNjQzODIsImV4cCI6MjA3MDk0MDM4Mn0.IRwC5-0cv2rkaZbzR1Ovxnt6dl0m1IwJgcLl2I67YzQ";
+    const SUPABASE_ANON_KEY =
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndqZmdudG9jcWp0d2FxYW1sYmdjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUzNjQzODIsImV4cCI6MjA3MDk0MDM4Mn0.IRwC5-0cv2rkaZbzR1Ovxnt6dl0m1IwJgcLl2I67YzQ";
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    const state = { view: 'Week', monthKey: keyFromDate(new Date()) };
-    let gantt;
+    const state = { view: "Week", monthKey: keyFromDate(new Date()) };
+    let gantt, tasksCache = [];
 
+    // Boot
     init();
-
-    async function init(){
+    async function init() {
       buildMonthPicker();
       await render();
       subscribeRealtime();
       bindControls();
     }
 
-    function bindControls(){
+    // Controls
+    function bindControls() {
       monthSelect.onchange = () => { state.monthKey = monthSelect.value; render(); };
-      viewDay.onclick = () => setView('Day');
-      viewWeek.onclick = () => setView('Week');
-      viewMonth.onclick = () => setView('Month');
+      viewDay.onclick    = () => setView("Day");
+      viewWeek.onclick   = () => setView("Week");
+      viewMonth.onclick  = () => setView("Month");
       refreshBtn.onclick = () => render();
-      window.addEventListener('resize', ()=>{ if(gantt) gantt.refresh(); });
+      window.addEventListener("resize", () => { if (gantt) gantt.refresh(); });
     }
     function setView(v){ state.view = v; if(gantt) gantt.change_view_mode(v); }
 
+    // Month picker
     function buildMonthPicker(){
       const base = new Date(); base.setDate(1);
-      monthSelect.innerHTML = '';
+      monthSelect.innerHTML = "";
       for(let o=-2;o<=9;o++){
         const d = new Date(base); d.setMonth(d.getMonth()+o);
         const key = keyFromDate(d);
-        const opt = document.createElement('option');
+        const opt = document.createElement("option");
         opt.value = key;
-        opt.textContent = d.toLocaleString(undefined,{month:'long',year:'numeric'});
+        opt.textContent = d.toLocaleString(undefined,{month:"long",year:"numeric"});
         if(key===state.monthKey) opt.selected = true;
         monthSelect.appendChild(opt);
       }
     }
-    function keyFromDate(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; }
-    function monthRangeFromKey(key){ const [y,m]=key.split('-').map(Number); return { start:new Date(y,m-1,1), end:new Date(y,m,0,23,59,59,999) }; }
+    function keyFromDate(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`; }
+    function monthRangeFromKey(key){ const [y,m]=key.split("-").map(Number); return { start:new Date(y,m-1,1), end:new Date(y,m,0,23,59,59,999) }; }
 
+    // Data
     async function fetchTasks(){
-      const { data, error } = await supabase.from('tasks').select('*').order('start_date',{ascending:true});
-      if(error){ console.error(error); return []; }
+      const { data, error } = await supabase
+        .from("tasks")
+        .select("*")
+        .order("start_date",{ascending:true});
+
+      if(error){ showErr(`Supabase error: ${error.message}`); return []; }
       const { start, end } = monthRangeFromKey(state.monthKey);
-      return (data||[]).filter(t => new Date(t.end_date||t.start_date)>=start && new Date(t.start_date)<=end);
+      hideErr();
+      return (data||[]).filter(t => new Date(t.end_date||t.start_date) >= start
+                                 && new Date(t.start_date) <= end);
     }
 
+    // Render
     async function render(){
       const rows = await fetchTasks();
-      const tasks = rows.map(r => ({
+      tasksCache = rows.map(r => ({
         id: r.id,
         name: r.title,
         start: toYMD(r.start_date),
         end: toYMD(r.end_date || r.start_date),
         progress: Number(r.progress || 0),
-        dependencies: (r.dependencies || '').trim(),
-        notes: r.notes || '',
-        custom_class: (
-          Number(r.progress||0) >= 100 ? 'is-done' :
-          Number(r.progress||0) > 0    ? 'is-doing' : 'is-todo'
-        )
+        dependencies: (r.dependencies || "").trim(),
+        notes: r.notes || "",
+        custom_class:
+          Number(r.progress||0) >= 100 ? "is-done" :
+          Number(r.progress||0) > 0   ? "is-doing" : "is-todo"
       }));
 
-      window.__TASKS_BY_ID__ = Object.fromEntries(tasks.map(t=>[String(t.id),t]));
-
-      document.getElementById('gantt').innerHTML = '';
-      gantt = new Gantt('#gantt', tasks, {
+      document.getElementById("gantt").innerHTML = "";
+      gantt = new Gantt("#gantt", tasksCache, {
         view_mode: state.view,
-        date_format: 'YYYY-MM-DD',
-        language: 'en'
+        date_format: "YYYY-MM-DD",
+        language: "en"
       });
 
-      applyProgressColors();
-      bindHover();
+      colorBars();
+      attachTooltips();
     }
 
-    function bindHover(){
-      const tip = document.getElementById('tooltip');
-      document.querySelectorAll('#gantt .bar-wrapper').forEach(w => {
-        w.onmouseenter = () => {
-          const id = w.getAttribute('data-id');
-          const t = window.__TASKS_BY_ID__?.[id]; if(!t) return;
-          tip.innerHTML = `<strong>${escapeHtml(t.name)}</strong><br>${t.start} → ${t.end}${t.notes?`<br>${escapeHtml(t.notes)}`:''}`;
-          tip.style.display = 'block';
-        };
-        w.onmousemove = e => { tip.style.left=(e.pageX+12)+'px'; tip.style.top=(e.pageY-20)+'px'; };
-        w.onmouseleave = () => { tip.style.display='none'; };
-      });
-    }
-
-    function applyProgressColors(){
-      document.querySelectorAll('#gantt .bar-wrapper').forEach(w => {
-        const id = w.getAttribute('data-id');
-        const t = window.__TASKS_BY_ID__?.[id]; if(!t) return;
-        const barProg = w.querySelector('.bar-progress');
-        if(!barProg) return;
+    // Colors
+    function colorBars(){
+      document.querySelectorAll("#gantt .bar-wrapper").forEach(w => {
+        const id = w.getAttribute("data-id");
+        const t = tasksCache.find(x => String(x.id) === String(id));
+        if(!t) return;
+        const bar  = w.querySelector(".bar");
+        const prog = w.querySelector(".bar-progress");
+        if(!bar || !prog) return;
 
         const p = Math.max(0, Math.min(100, Number(t.progress||0)));
+
+        // completed
         if(p >= 100){
-          w.querySelector('.bar')?.setAttribute('fill', getComputedStyle(document.documentElement).getPropertyValue('--done-base').trim());
-          barProg.setAttribute('fill', getComputedStyle(document.documentElement).getPropertyValue('--done').trim());
+          bar.setAttribute("fill", getCSS("--done-base"));
+          prog.setAttribute("fill", getCSS("--done"));
           return;
         }
+        // pending
         if(p === 0){
-          w.querySelector('.bar')?.setAttribute('fill', getComputedStyle(document.documentElement).getPropertyValue('--pending0').trim());
-          barProg.setAttribute('fill', 'rgba(0,0,0,0)');
+          bar.setAttribute("fill", getCSS("--pending"));
+          prog.setAttribute("fill", "rgba(0,0,0,0)");
           return;
         }
-        const shade = lerpColor('#F6F1E1', '#C5BCA2', p/100);
-        barProg.setAttribute('fill', shade);
-        w.querySelector('.bar')?.setAttribute('fill', getComputedStyle(document.documentElement).getPropertyValue('--doing-base').trim());
+        // in progress: beige overlay that deepens with % (warm ramp)
+        bar.setAttribute("fill", getCSS("--doing"));
+        prog.setAttribute("fill", beigeRamp(p));
       });
     }
 
-    function lerpColor(a,b,t){
-      const ca = hexToRgb(a), cb = hexToRgb(b);
-      const r = Math.round(ca.r + (cb.r-ca.r)*t);
-      const g = Math.round(ca.g + (cb.g-ca.g)*t);
-      const bl= Math.round(ca.b + (cb.b-ca.b)*t);
-      return `rgb(${r}, ${g}, ${bl})`;
-    }
-    function hexToRgb(hex){
-      const h = hex.replace('#','');
-      return { r: parseInt(h.substring(0,2),16), g: parseInt(h.substring(2,4),16), b: parseInt(h.substring(4,6),16) };
+    // Hover tooltip
+    function attachTooltips(){
+      const tip = document.getElementById("tooltip");
+      document.querySelectorAll("#gantt .bar-wrapper").forEach(w => {
+        w.onmouseenter = () => {
+          const id = w.getAttribute("data-id");
+          const t = tasksCache.find(x => String(x.id) === String(id));
+          if(!t) return;
+          tip.innerHTML = `<strong>${escapeHtml(t.name)}</strong><br>${t.start} → ${t.end}<br>${t.progress}%${t.notes?`<br>${escapeHtml(t.notes)}`:""}`;
+          tip.style.display = "block";
+        };
+        w.onmousemove = e => { tip.style.left = (e.pageX+12)+"px"; tip.style.top = (e.pageY-20)+"px"; };
+        w.onmouseleave = () => { tip.style.display = "none"; };
+      });
     }
 
+    // Beige ramp for progress overlay
+    function beigeRamp(p){
+      const h = 38, s = 45;    // warm tone
+      const lStart = 92;       // very light
+      const lEnd   = 58;       // deeper
+      const l = lStart + (lEnd - lStart) * (p/100);
+      return `hsl(${h}, ${s}%, ${l}%)`;
+    }
+
+    // Realtime
     function subscribeRealtime(){
-      supabase.channel('public:tasks')
-        .on('postgres_changes',{event:'*',schema:'public',table:'tasks'}, debounce(()=>{ render(); },300))
+      supabase.channel("public:tasks")
+        .on("postgres_changes",{event:"*", schema:"public", table:"tasks"}, debounce(()=>{ render(); }, 300))
         .subscribe();
     }
 
-    function toYMD(d){ const x=new Date(d); return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`; }
-    function escapeHtml(s){ return String(s).replace(/[&<>"]|'g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;','\'':'&#39;'}[c])); }
+    // Utils
+    function toYMD(d){ const x=new Date(d); return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,"0")}-${String(x.getDate()).padStart(2,"0")}`; }
+    function escapeHtml(s){
+      return String(s).replace(/[&<>"']/g, (c) => ({
+        "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"
+      })[c]);
+    }
+    function getCSS(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
     function debounce(fn,wait){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn.apply(this,a),wait); }; }
+    function showErr(msg){ const el=document.getElementById("err"); el.textContent=msg; el.style.display="block"; }
+    function hideErr(){ const el=document.getElementById("err"); el.style.display="none"; }
   </script>
 </body>
 </html>
