@@ -112,7 +112,8 @@
         const key = keyFromDate(d);
         const opt = document.createElement('option');
         opt.value = key;
-        opt.textContent = d.toLocaleString(undefined, { month:'long', year:'numeric' });
+        const label = d.toLocaleString(undefined, { month:'long', year:'numeric' });
+        opt.textContent = label;
         if(key === state.monthKey) opt.selected = true;
         monthSelect.appendChild(opt);
       }
@@ -151,7 +152,8 @@
         progress: Number(r.progress || 0),
         dependencies: (r.dependencies || '').trim(),
         custom_class: statusClass(Number(r.progress || 0)),
-        notes: r.notes || ''
+        // read notes from 'notes' or fall back to 'description'
+        notes: (r.notes ?? r.description ?? '').trim()
       }));
 
       ganttEl.innerHTML = '';
@@ -160,7 +162,7 @@
         return;
       }
 
-      // draw the gantt with a custom popup
+      // draw the gantt with a custom popup (on click)
       gantt = new Gantt('#gantt', tasks, {
         view_mode: state.view,
         date_format: 'YYYY-MM-DD',
@@ -175,8 +177,11 @@
         }
       });
 
-      // also show quick hover text with the notes
-      setHoverTooltips(tasks);
+      // true hover tooltips: inject SVG <title> into each bar
+      setSvgHoverTitles(tasks);
+
+      // also fix tooltips after a tiny delay (in case the library redraws)
+      setTimeout(() => setSvgHoverTitles(tasks), 150);
     }
 
     function statusClass(p){
@@ -190,15 +195,27 @@
         .subscribe();
     }
 
-    function setHoverTooltips(tasks){
-      const idToNotes = Object.fromEntries(tasks.map(t => [String(t.id), t.notes || '']));
+    // --- helpers for hover + formatting ---
+    function setSvgHoverTitles(tasks){
+      const map = Object.fromEntries(tasks.map(t => [String(t.id), t]));
       document.querySelectorAll('.gantt .bar-wrapper').forEach(wrap => {
         const id = wrap.getAttribute('data-id');
-        const rect = wrap.querySelector('.bar');
-        if(rect){
-          const text = (idToNotes[id] || '').trim();
-          rect.setAttribute('title', text || wrap.textContent.trim());
-        }
+        const rect = wrap.querySelector('.bar'); // SVG rect
+        if(!rect) return;
+
+        // remove existing <title> if any
+        const oldTitle = rect.querySelector('title');
+        if(oldTitle) oldTitle.remove();
+
+        // build hover text: name + notes
+        const t = map[id];
+        const note = (t?.notes || '').trim();
+        const hover = (t ? `${t.name}${note ? ' — ' + note : ''}` : (wrap.textContent || '').trim());
+
+        // add SVG <title>
+        const titleEl = document.createElementNS('http://www.w3.org/2000/svg','title');
+        titleEl.textContent = hover;
+        rect.appendChild(titleEl);
       });
     }
 
