@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>UDP Programme Comms Dashboard</title>
 
-  <!-- Frappe Gantt (browser-ready UMD build) -->
+  <!-- Frappe Gantt (browser UMD build) -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/frappe-gantt@0.5.0/dist/frappe-gantt.css" />
   <script src="https://cdn.jsdelivr.net/npm/frappe-gantt@0.5.0/dist/frappe-gantt.min.js"></script>
 
@@ -37,7 +37,7 @@
     #gantt{overflow:auto;background:var(--card);border:1px solid rgba(255,255,255,.08);border-radius:16px}
     .legend{display:flex;gap:16px;align-items:center;flex-wrap:wrap;color:var(--muted);font-size:12px;margin-top:8px}
     .legend .sw{width:10px;height:10px;border-radius:3px;display:inline-block;margin-right:6px}
-    .details-card{background:#0f1218;border:1px solid rgba(255,255,255,.1);padding:10px 12px;border-radius:10px}
+    .details-card{background:#0f1218;border:1px solid rgba(255,255,255,.1);padding:10px 12px;border-radius:10px;max-width:260px}
   </style>
 </head>
 <body>
@@ -152,7 +152,6 @@
         progress: Number(r.progress || 0),
         dependencies: (r.dependencies || '').trim(),
         custom_class: statusClass(Number(r.progress || 0)),
-        // read notes from 'notes' or fall back to 'description'
         notes: (r.notes ?? r.description ?? '').trim()
       }));
 
@@ -162,7 +161,7 @@
         return;
       }
 
-      // draw the gantt with a custom popup (on click)
+      // draw the gantt with a custom popup (click)
       gantt = new Gantt('#gantt', tasks, {
         view_mode: state.view,
         date_format: 'YYYY-MM-DD',
@@ -177,11 +176,11 @@
         }
       });
 
-      // true hover tooltips: inject SVG <title> into each bar
-      setSvgHoverTitles(tasks);
+      // native hover text via SVG <title>
+      injectHoverTitles(tasks);
 
-      // also fix tooltips after a tiny delay (in case the library redraws)
-      setTimeout(() => setSvgHoverTitles(tasks), 150);
+      // open/close popup on hover (not just click)
+      enableHoverPopup(tasks);
     }
 
     function statusClass(p){
@@ -195,29 +194,54 @@
         .subscribe();
     }
 
-    // --- helpers for hover + formatting ---
-    function setSvgHoverTitles(tasks){
+    // --- HOVER HELPERS -------------------------------------------------------
+    function injectHoverTitles(tasks){
       const map = Object.fromEntries(tasks.map(t => [String(t.id), t]));
+      // frappe-gantt draws <g class="bar-wrapper" data-id="..."><rect class="bar">...</g>
       document.querySelectorAll('.gantt .bar-wrapper').forEach(wrap => {
         const id = wrap.getAttribute('data-id');
-        const rect = wrap.querySelector('.bar'); // SVG rect
+        const rect = wrap.querySelector('rect.bar');
         if(!rect) return;
 
-        // remove existing <title> if any
-        const oldTitle = rect.querySelector('title');
-        if(oldTitle) oldTitle.remove();
+        // clear previous title
+        const old = rect.querySelector('title'); if(old) old.remove();
 
-        // build hover text: name + notes
         const t = map[id];
         const note = (t?.notes || '').trim();
-        const hover = (t ? `${t.name}${note ? ' — ' + note : ''}` : (wrap.textContent || '').trim());
+        const hover = t ? `${t.name}${note ? ' — ' + note : ''}` : (wrap.textContent || '').trim();
 
-        // add SVG <title>
         const titleEl = document.createElementNS('http://www.w3.org/2000/svg','title');
         titleEl.textContent = hover;
         rect.appendChild(titleEl);
       });
     }
+
+    function enableHoverPopup(tasks){
+      const map = Object.fromEntries(tasks.map(t => [String(t.id), t]));
+      const wrappers = document.querySelectorAll('.gantt .bar-wrapper');
+
+      wrappers.forEach(wrap => {
+        const id = wrap.getAttribute('data-id');
+
+        wrap.addEventListener('mouseenter', () => {
+          const task = map[id];
+          // prefer library API if available
+          if (gantt && typeof gantt.show_popup === 'function') {
+            gantt.show_popup(task);
+          } else {
+            // fallback: simulate click to open
+            wrap.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+          }
+        });
+
+        wrap.addEventListener('mouseleave', () => {
+          if (gantt && typeof gantt.hide_popup === 'function') {
+            gantt.hide_popup();
+          }
+        });
+      });
+    }
+    // ------------------------------------------------------------------------
 
     function formatDate(d){
       const x = new Date(d);
