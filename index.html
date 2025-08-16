@@ -39,11 +39,7 @@
     .legend { display:flex; gap:16px; align-items:center; flex-wrap:wrap; color: var(--muted); font-size:12px; margin-top:8px }
     .legend .sw { width:10px; height:10px; border-radius:3px; display:inline-block; margin-right:6px; }
 
-    /* nicer popup card */
-    .details-card {
-      background:#0f1218; border:1px solid rgba(255,255,255,.1);
-      padding:10px 12px; border-radius:10px
-    }
+    .details-card { background:#0f1218; border:1px solid rgba(255,255,255,.1); padding:10px 12px; border-radius:10px }
   </style>
 </head>
 <body>
@@ -77,10 +73,10 @@
   </div>
 
   <script>
-    // ---- 1) YOUR SUPABASE CREDENTIALS (replace these two lines) ----
-    const SUPABASE_URL = "https://wjfgntocqjtwaqamlbgc.supabase.co";   // e.g. https://wjfgntocqjtwaqam1bgc.supabase.co
+    // ---- Supabase credentials (your values) ----
+    const SUPABASE_URL = "https://wjfgntocqjtwaqamlbgc.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndqZmdudG9jcWp0d2FxYW1sYmdjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUzNjQzODIsImV4cCI6MjA3MDk0MDM4Mn0.IRwC5-0cv2rkaZbzR1Ovxnt6dl0m1IwJgcLl2I67YzQ";
-    // ----------------------------------------------------------------
+    // -------------------------------------------
 
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -164,6 +160,11 @@
       }));
 
       ganttEl.innerHTML = '';
+      if(!tasks.length){
+        ganttEl.innerHTML = "<div class='hint' style='padding:10px'>No tasks found for this month.</div>";
+        return;
+      }
+
       gantt = new Gantt('#gantt', tasks, {
         view_mode: state.view,
         date_format: 'YYYY-MM-DD',
@@ -178,7 +179,7 @@
         }
       });
 
-      // add simple hover tooltips with notes (so you see text on hover too)
+      // add hover tooltips with notes (for quick glance)
       setHoverTooltips(tasks);
     }
 
@@ -195,7 +196,6 @@
 
     function setHoverTooltips(tasks){
       const idToNotes = Object.fromEntries(tasks.map(t => [String(t.id), t.notes || '']));
-      // bars are <rect> inside elements with [data-id]
       document.querySelectorAll('.gantt .bar-wrapper').forEach(wrap => {
         const id = wrap.getAttribute('data-id');
         const rect = wrap.querySelector('.bar');
