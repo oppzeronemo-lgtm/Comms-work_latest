@@ -99,6 +99,7 @@
 
     async function render(){
       const rows = await fetchTasks();
+      if(!rows.length){ document.getElementById('gantt').innerHTML='<p style="text-align:center;color:#777">No tasks this month</p>'; return; }
       const tasks = rows.map(r=>({
         id:r.id, name:r.title, start:toYMD(r.start_date), end:toYMD(r.end_date||r.start_date),
         progress:Number(r.progress||0), dependencies:(r.dependencies||'').trim(), notes:r.notes||''
