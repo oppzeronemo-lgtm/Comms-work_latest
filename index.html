@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/frappe-gantt@0.5.0/dist/frappe-gantt.css" />
   <script src="https://cdn.jsdelivr.net/npm/frappe-gantt@0.5.0/dist/frappe-gantt.min.js"></script>
 
-  <!-- Supabase -->
+  <!-- Supabase JS v2 -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <style>
@@ -24,36 +24,58 @@
     body{font:14px system-ui,-apple-system,Segoe UI,Roboto,Helvetica Neue,Arial;color:var(--ink);background:var(--bg)}
 
     .app{min-height:100vh;display:flex;flex-direction:column}
-    header{display:flex;justify-content:space-between;align-items:center;padding:10px 20px;border-bottom:1px solid var(--line);background:#fff}
+
+    header{
+      display:flex;justify-content:space-between;align-items:center;gap:12px;
+      padding:10px 16px;border-bottom:1px solid var(--line);background:#fff
+    }
     .brand{display:flex;gap:8px;align-items:center}
-    .live{width:10px;height:10px;border-radius:50%;background:var(--live);box-shadow:0 0 0 6px rgba(34,197,94,.15);animation:pulse 2s infinite}
+    .live{width:10px;height:10px;border-radius:50%;background:var(--live);
+      box-shadow:0 0 0 6px rgba(34,197,94,.15);animation:pulse 2s infinite}
     @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(34,197,94,.4)}70%{box-shadow:0 0 0 12px rgba(34,197,94,0)}100%{box-shadow:0 0 0 0 rgba(34,197,94,0)}}
-    .controls{display:flex;gap:8px}
-    .controls>*{padding:6px 12px;border:1px solid var(--line);border-radius:8px;background:#fff;cursor:pointer}
+    .controls{display:flex;gap:8px;align-items:center}
+    .controls>*{padding:8px 12px;border:1px solid var(--line);border-radius:10px;background:#fff;cursor:pointer}
 
     main{flex:1;display:flex;flex-direction:column;gap:10px;padding:12px}
-    /* Keep the horizontal scrollbar pinned to the bottom */
-    #gantt{height:auto;border:1px solid var(--line);border-radius:10px;background:#fff;overflow-x:auto;overflow-y:hidden}
 
-    .legend{display:flex;gap:16px;align-items:center;font-size:13px;color:var(--muted);padding:0 4px}
+    /* Gantt container – bottom scrollbar */
+    #gantt{
+      height:auto;               /* we set exact px height with JS after render */
+      border:1px solid var(--line);border-radius:10px;background:#fff;
+      overflow-x:auto;overflow-y:hidden;
+      -webkit-overflow-scrolling:touch; /* smooth swipe on iOS */
+    }
+
+    .legend{display:flex;gap:16px;align-items:center;flex-wrap:wrap;font-size:13px;color:var(--muted);padding:0 4px}
     .legend .sw{width:12px;height:12px;border-radius:3px;border:1px solid var(--line);display:inline-block;margin-right:6px}
 
-    /* Light theme tweaks */
+    /* Light Gantt look */
     .gantt .grid-row:nth-child(even){fill:#f8fafc}
     .gantt .lower-text,.gantt .upper-text,.gantt .bar-label{fill:#0f172a;font-weight:600}
-
-    /* Defaults (we override with inline styles after render) */
     .gantt .bar{fill:var(--ash)}
     .gantt .bar-progress{fill:var(--beige);transition:width .6s cubic-bezier(.22,.61,.36,1)}
     .progress-edge{stroke:#b4a89a;stroke-width:1;shape-rendering:crispEdges}
     .hover-hit{fill:transparent;pointer-events:all}
+
+    /* ---------- Mobile responsiveness ---------- */
+    @media (max-width: 768px){
+      header{flex-direction:column;align-items:flex-start}
+      .controls{flex-wrap:wrap;width:100%}
+      .controls>*{
+        flex:1 1 auto; min-width:96px; text-align:center;
+        padding:10px; font-size:13px; border-radius:12px;
+      }
+      main{padding:8px}
+      .legend{flex-direction:column;align-items:flex-start;gap:6px}
+      .gantt .bar-label{font-size:11px}
+    }
   </style>
 </head>
 <body>
 <div class="app">
   <header>
     <div class="brand">
-      <div class="live"></div>
+      <div class="live" title="Realtime"></div>
       <div>
         <div style="font-weight:700">UDP Programme Comms Dashboard</div>
         <div style="font-size:12px;color:var(--muted)">Comms Focal: Abu Nayeem Md Shakib</div>
@@ -79,18 +101,18 @@
 </div>
 
 <script>
-  // Supabase
+  // Supabase (your creds)
   const SUPABASE_URL = "https://wjfgntocqjtwaqamlbgc.supabase.co";
   const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndqZmdudG9jcWp0d2FxYW1sYmdjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUzNjQzODIsImV4cCI6MjA3MDk0MDM4Mn0.IRwC5-0cv2rkaZbzR1Ovxnt6dl0m1IwJgcLl2I67YzQ";
   const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-  // State (explicit to avoid empty dropdown bugs)
+  // State
   const state = { view: 'Week', monthKey: monthKey(new Date()) };
   const monthSelect = document.getElementById('monthSelect');
   const ganttEl = document.getElementById('gantt');
-  let gantt, tasksCache = [];
+  let gantt;
 
-  // ---- init
+  // Init
   buildMonthPicker();
   bindControls();
   render();
@@ -99,15 +121,15 @@
     .subscribe();
 
   function bindControls(){
-    document.getElementById('viewDay').onclick   = () => { state.view='Day';   if(gantt) { gantt.change_view_mode('Day');   fixHeight(); } };
-    document.getElementById('viewWeek').onclick  = () => { state.view='Week';  if(gantt) { gantt.change_view_mode('Week');  fixHeight(); } };
-    document.getElementById('viewMonth').onclick = () => { state.view='Month'; if(gantt) { gantt.change_view_mode('Month'); fixHeight(); } };
+    document.getElementById('viewDay').onclick   = () => { state.view='Day';   if(gantt){gantt.change_view_mode('Day');   fixHeight();} };
+    document.getElementById('viewWeek').onclick  = () => { state.view='Week';  if(gantt){gantt.change_view_mode('Week');  fixHeight();} };
+    document.getElementById('viewMonth').onclick = () => { state.view='Month'; if(gantt){gantt.change_view_mode('Month'); fixHeight();} };
     document.getElementById('refreshBtn').onclick = () => render();
     monthSelect.onchange = () => { state.monthKey = monthSelect.value; render(); };
-    window.addEventListener('resize', () => setTimeout(fixHeight, 60));
+    window.addEventListener('resize', () => setTimeout(fixHeight, 80));
   }
 
-  // ---- month dropdown (fixed)
+  // Month dropdown (mobile safe)
   function buildMonthPicker(){
     monthSelect.innerHTML = '';
     const base = new Date(); base.setDate(1);
@@ -127,7 +149,7 @@
     return { start:new Date(y,m-1,1), end:new Date(y,m,0,23,59,59,999) };
   }
 
-  // ---- data
+  // Data
   async function fetchTasks(){
     const { data, error } = await supabase.from('tasks').select('*').order('start_date');
     if(error){ console.error(error); return []; }
@@ -138,7 +160,7 @@
     });
   }
 
-  // ---- draw
+  // Draw
   async function render(){
     const rows = await fetchTasks();
     const tasks = rows.map(r=>({
@@ -149,7 +171,6 @@
       progress:Number(r.progress || 0),
       notes:(r.notes ?? r.description ?? '').trim()
     }));
-    tasksCache = tasks;
 
     ganttEl.innerHTML = '';
     gantt = new Gantt('#gantt', tasks, {
@@ -157,21 +178,20 @@
       bar_height: 24,
       padding: 20,
       custom_popup_html: t => `
-        <div style="background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 12px;max-width:260px">
+        <div style="background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 12px;max-width:min(280px, 90vw)">
           <div style="font-weight:700">${escapeHtml(t.name)}</div>
           <div style="color:#64748b;font-size:12px;margin-top:2px">${t._start.format('ll')} → ${t._end.format('ll')} · ${t.progress}%</div>
-          <div style="margin-top:6px;font-size:12px;color:#0f172a">${escapeHtml(t.notes || 'No description')}</div>
+          <div style="margin-top:6px;font-size:12px;color:#0f172a;max-width:90vw;word-wrap:break-word">${escapeHtml(t.notes || 'No description')}</div>
         </div>`
     });
 
     colorAndHover(tasks);
-    fixHeight();   // keep scrollbar pinned low
+    fixHeight();     // keep bottom scrollbar tight
   }
 
-  // ---- colors + hover (100% fix uses inline styles)
+  // Colors + hover; 100% = hard red (inline)
   function colorAndHover(tasks){
     const map = Object.fromEntries(tasks.map(t => [String(t.id), t]));
-
     document.querySelectorAll('.gantt .bar-wrapper').forEach(wrap => {
       const id = wrap.getAttribute('data-id');
       const t  = map[id];
@@ -179,11 +199,9 @@
       const prog = wrap.querySelector('rect.bar-progress');
       if(!bar) return;
 
-      // default look
       bar.style.fill = 'var(--ash)';
       if(prog) prog.style.fill = 'var(--beige)';
 
-      // 100% => hard red (bar + progress) and force overlay width to full
       if(t && t.progress >= 100){
         bar.style.fill = 'var(--red)';
         if(prog){
@@ -192,7 +210,7 @@
         }
       }
 
-      // separator line only for 1–99%
+      // separator only for 1–99%
       let edge = wrap.querySelector('line.progress-edge');
       if(!edge){
         edge = document.createElementNS('http://www.w3.org/2000/svg','line');
@@ -210,7 +228,7 @@
         edge.style.display='none';
       }
 
-      // full-bar hover tooltip + popup
+      // full-bar hover (tooltip + popup)
       let hit = wrap.querySelector('rect.hover-hit');
       if(!hit){ hit = document.createElementNS('http://www.w3.org/2000/svg','rect'); hit.setAttribute('class','hover-hit'); wrap.appendChild(hit); }
       ['x','y','width','height','rx','ry'].forEach(a=>{ const v = bar.getAttribute(a); if(v!=null) hit.setAttribute(a, v); });
@@ -222,7 +240,7 @@
     });
   }
 
-  // ---- keep horizontal scrollbar at bottom
+  // keep horizontal scrollbar exactly at bottom
   function fixHeight(){
     const svg = ganttEl.querySelector('svg');
     if(!svg) return;
