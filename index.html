@@ -31,9 +31,10 @@
     .controls > * { background: var(--card); color: var(--text); border: 1px solid rgba(255,255,255,.1); border-radius: 12px; padding: 10px 12px; }
     select,button,input{ font: inherit }
     .hint { color: var(--muted); font-size: 12px; }
-    #gantt { overflow: auto; background: var(--card); border: 1px solid rgba(255,255,255,.08); border-radius: 16px; }
+    #gantt { overflow: auto; background: var(--card); border: 1px solid rgba(255,255,255,.08); border-radius: 16px; min-height: 420px; }
     .legend { display:flex; gap:16px; align-items:center; flex-wrap:wrap; color: var(--muted); font-size:12px; margin-top:8px }
     .legend .sw { width:10px; height:10px; border-radius:3px; display:inline-block; margin-right:6px; }
+    .err { background:#2a1313; color:#ffb4b4; padding:8px 10px; border-radius:8px; margin-top:10px; display:none; }
   </style>
 </head>
 <body>
@@ -43,7 +44,7 @@
         <div class="live-dot" title="Realtime connected"></div>
         <div>
           <div style="font-weight:600">Live Monthly Gantt</div>
-          <div class="hint">Share this GitHub Pages link with your manager to see updates instantly</div>
+          <div class="hint">Share this GitHub Pages link to show updates instantly</div>
         </div>
       </div>
       <div class="controls">
@@ -62,7 +63,8 @@
         <span><span class="sw" style="background:#22c55e"></span>Done</span>
         <span><span class="sw" style="background:#f59e0b"></span>In progress</span>
       </div>
-      <div class="hint" style="margin-top:8px">Times are shown in your local time. For Dhaka, set your device timezone to Asia/Dhaka.</div>
+      <div class="hint" style="margin-top:8px">Times show in your device timezone. For Dhaka, set Asia/Dhaka.</div>
+      <div id="err" class="err"></div>
     </div>
 
     <div class="hint" style="margin-top:14px">
@@ -71,10 +73,11 @@
   </div>
 
   <script>
-    // 1) Add your Supabase credentials
-    const SUPABASE_URL = https://wjfgntocqjtwaqamlbgc.supabase.co
-    const SUPABASE_ANON_KEY = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndqZmdudG9jcWp0d2FxYW1sYmdjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUzNjQzODIsImV4cCI6MjA3MDk0MDM4Mn0.IRwC5-0cv2rkaZbzR1Ovxnt6dl0m1IwJgcLl2I67YzQ
-    // 2) connect supabase
+    // Your Supabase credentials
+    const SUPABASE_URL = "https://wjfgntocqjtwaqamlbgc.supabase.co";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndqZmdudG9jcWp0d2FxYW1sYmdjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUzNjQzODIsImV4cCI6MjA3MDk0MDM4Mn0.IRwC5-0cv2rkaZbzR1Ovxnt6dl0m1IwJgcLl2I67YzQ";
+
+    // Connect Supabase
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     const state = {
@@ -88,6 +91,7 @@
     const btnMonth = document.getElementById('viewMonth');
     const refreshBtn = document.getElementById('refreshBtn');
     const ganttEl = document.getElementById('gantt');
+    const errEl = document.getElementById('err');
     let gantt;
 
     init();
@@ -135,17 +139,23 @@
     }
 
     async function fetchTasks(){
-      const { data, error } = await supabase
-        .from('tasks')
-        .select('*')
-        .order('start_date', { ascending: true });
-      if(error){ console.error(error); return []; }
-      const { start, end } = monthRangeFromKey(state.monthKey);
-      return (data || []).filter(t => {
-        const s = new Date(t.start_date);
-        const e = new Date(t.end_date || t.start_date);
-        return e >= start && s <= end;
-      });
+      try {
+        const { data, error } = await supabase
+          .from('tasks')
+          .select('*')
+          .order('start_date', { ascending: true });
+        if(error) throw error;
+        const { start, end } = monthRangeFromKey(state.monthKey);
+        return (data || []).filter(t => {
+          const s = new Date(t.start_date);
+          const e = new Date(t.end_date || t.start_date);
+          return e >= start && s <= end;
+        });
+      } catch (e) {
+        showErr(e.message || String(e));
+        console.error(e);
+        return [];
+      }
     }
 
     async function render(){
@@ -203,7 +213,12 @@
     }
 
     function escapeHtml(s){
-      return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#039;'}[c]));
+      return String(s).replace(/[&<>\"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#039;'}[c]));
+    }
+
+    function showErr(msg) {
+      errEl.style.display = 'block';
+      errEl.textContent = 'Error: ' + msg + ' — Check your Supabase URL, anon key, RLS policy, and that the table has data.';
     }
   </script>
 
