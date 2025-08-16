@@ -9,28 +9,27 @@
   <link rel="stylesheet" href="https://unpkg.com/frappe-gantt@0.6.1/dist/frappe-gantt.css" />
   <script src="https://unpkg.com/frappe-gantt@0.6.1/dist/frappe-gantt.min.js"></script>
 
-  <!-- Supabase -->
+  <!-- Supabase (UMD) -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <style>
-    :root {
-      --pending:#FFD8A8;   /* light orange */
-      --doing:#EDE8D0;     /* ash base */
-      --done:#008000;      /* green overlay */
-      --done-base:#E8F5EA; /* pale green base */
+    :root{
+      --pending:#FFD8A8;   /* 0% (light orange) */
+      --doing:#EDE8D0;     /* in-progress base (light ash) */
+      --done:#008000;      /* 100% overlay */
+      --done-base:#E8F5EA; /* completed base */
       --ink:#202124; --muted:#6b7280; --border:#e5e7eb;
     }
 
-    html, body {height:100%}
-    body {margin:0;background:#fff;color:var(--ink);font:15px/1.5 Inter,system-ui,Segoe UI,Roboto,Arial}
+    html,body{height:100%}
+    body{margin:0;background:#fff;color:var(--ink);font:15px/1.5 Inter,system-ui,Segoe UI,Roboto,Arial}
 
     .wrap{height:100%;display:flex;flex-direction:column;padding:16px;box-sizing:border-box}
     .top{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
     .brand{font-weight:700;font-size:18px}
     .controls>*{margin-left:6px}
 
-    .card{flex:1;display:flex;flex-direction:column;min-height:0;background:#fafafa;
-          border:1px solid var(--border);border-radius:12px;padding:12px}
+    .card{flex:1;display:flex;flex-direction:column;min-height:0;background:#fafafa;border:1px solid var(--border);border-radius:12px;padding:12px}
     #gantt{flex:1;border:1px solid var(--border);border-radius:10px;background:#fff;min-height:360px}
 
     .legend{display:flex;gap:18px;align-items:center;color:var(--muted);font-size:13px;margin-top:8px}
@@ -39,15 +38,14 @@
     .sw.doing{background:var(--doing)}
     .sw.done{background:var(--done)}
 
-    /* Sleek bars */
-    #gantt .bar, #gantt .bar-progress {height:18px; rx:4px; ry:4px; stroke:none}
-    #gantt .bar-wrapper {transform:translateY(6px)}
-    .gantt .bar-label {stroke:none;font-weight:600;fill:#111827;font-size:13px}
+    /* Sleek, flat bars (no borders, no thick strokes) */
+    #gantt .bar, #gantt .bar-progress { height:18px; rx:4px; ry:4px; stroke:none !important }
+    #gantt .bar-wrapper{ transform:translateY(6px) }
+    .gantt .bar-label{ stroke:none; font-weight:600; fill:#111827; font-size:13px }
 
     /* Tooltip */
-    .tip{position:absolute;background:#fff;border:1px solid var(--border);padding:8px 10px;
-         border-radius:8px;box-shadow:0 6px 16px rgba(0,0,0,.08);
-         font-size:13px;display:none;pointer-events:none;z-index:1000}
+    .tip{position:absolute;background:#fff;border:1px solid var(--border);padding:8px 10px;border-radius:8px;
+         box-shadow:0 6px 16px rgba(0,0,0,.08);font-size:13px;display:none;pointer-events:none;z-index:1000}
   </style>
 </head>
 <body>
@@ -76,90 +74,132 @@
   <div id="tip" class="tip"></div>
 
   <script>
+    // === Your Supabase project ===
     const SUPABASE_URL = "https://wjfgntocqjtwaqamlbgc.supabase.co";
     const SUPABASE_ANON_KEY =
       "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndqZmdudG9jcWp0d2FxYW1sYmdjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUzNjQzODIsImV4cCI6MjA3MDk0MDM4Mn0.IRwC5-0cv2rkaZbzR1Ovxnt6dl0m1IwJgcLl2I67YzQ";
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    const state = { view:'Week', monthKey: keyFromDate(new Date()) };
+    const state = { view:'Week', monthKey:keyFromDate(new Date()) };
     let gantt, tasksById = {};
 
+    // ------------- Boot -------------
     init();
     async function init(){
       buildMonthPicker();
       bindControls();
       await render();
+
+      // Re-apply colors on any DOM redraw (prevents purple fallback)
+      const obs = new MutationObserver(() => applyColors());
+      obs.observe(document.getElementById('gantt'), { childList:true, subtree:true });
     }
 
+    // ------------- Controls -------------
     function bindControls(){
       monthSelect.onchange = () => { state.monthKey = monthSelect.value; render(); };
-      viewDay.onclick   = () => setView('Day');
-      viewWeek.onclick  = () => setView('Week');
-      viewMonth.onclick = () => setView('Month');
+      viewDay.onclick   = () => changeView('Day');
+      viewWeek.onclick  = () => changeView('Week');
+      viewMonth.onclick = () => changeView('Month');
       refreshBtn.onclick= () => render();
     }
-    function setView(v){ state.view=v; if(gantt) gantt.change_view_mode(v); }
+    function changeView(v){ state.view=v; if(gantt){ gantt.change_view_mode(v); setTimeout(applyColors,0); } }
 
     function buildMonthPicker(){
-      const base=new Date(); base.setDate(1); monthSelect.innerHTML='';
+      const base = new Date(); base.setDate(1); monthSelect.innerHTML = '';
       for(let o=-2;o<=9;o++){
-        const d=new Date(base); d.setMonth(d.getMonth()+o);
-        const key=keyFromDate(d);
-        const opt=document.createElement('option');
-        opt.value=key; opt.textContent=d.toLocaleString(undefined,{month:'long',year:'numeric'});
-        if(key===state.monthKey) opt.selected=true;
+        const d = new Date(base); d.setMonth(d.getMonth()+o);
+        const key = keyFromDate(d);
+        const opt = document.createElement('option');
+        opt.value = key;
+        opt.textContent = d.toLocaleString(undefined,{month:'long',year:'numeric'});
+        if(key===state.monthKey) opt.selected = true;
         monthSelect.appendChild(opt);
       }
     }
 
-    function keyFromDate(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;}
-    function toYMD(d){const x=new Date(d);return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`;}
+    // ------------- Data helpers -------------
+    function keyFromDate(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; }
+    function monthRangeFromKey(key){ const [y,m]=key.split('-').map(Number); return { start:new Date(y,m-1,1), end:new Date(y,m,0,23,59,59,999) }; }
+    function toYMD(d){ const x=new Date(d); return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`; }
+    function css(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
 
     async function fetchTasks(){
       const { data, error } = await supabase.from('tasks').select('*').order('start_date',{ascending:true});
       if(error){ console.error(error); return []; }
-      return data||[];
+      const { start, end } = monthRangeFromKey(state.monthKey);
+      // Show tasks that intersect the selected month
+      return (data||[]).filter(t => new Date(t.end_date||t.start_date)>=start && new Date(t.start_date)<=end);
     }
 
+    // ------------- Render -------------
     async function render(){
-      const rows=await fetchTasks();
-      const el=document.getElementById('gantt');
-      if(!rows.length){ el.innerHTML='<div style="text-align:center;color:#777;padding:24px">No tasks this month</div>'; return; }
-      const tasks=rows.map(r=>({
-        id:String(r.id), name:r.title, start:toYMD(r.start_date),
-        end:toYMD(r.end_date||r.start_date), progress:Number(r.progress||0),
+      const rows = await fetchTasks();
+      const el = document.getElementById('gantt');
+      if(!rows.length){ el.innerHTML = '<div style="text-align:center;color:#777;padding:24px">No tasks this month</div>'; return; }
+
+      const tasks = rows.map(r=>({
+        id:String(r.id),
+        name:r.title,
+        start:toYMD(r.start_date),
+        end:toYMD(r.end_date||r.start_date),
+        progress:Number(r.progress||0),
         notes:r.notes||''
       }));
-      tasksById=Object.fromEntries(tasks.map(t=>[t.id,t]));
-      el.innerHTML='';
-      gantt=new Gantt('#gantt',tasks,{view_mode:state.view,date_format:'YYYY-MM-DD'});
-      paintBars(); attachTooltip();
+      tasksById = Object.fromEntries(tasks.map(t=>[t.id,t]));
+
+      el.innerHTML = '';
+      gantt = new Gantt('#gantt', tasks, { view_mode:state.view, date_format:'YYYY-MM-DD' });
+
+      applyColors();
+      attachTooltip();
     }
 
-    function css(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim();}
-
-    function paintBars(){
+    // ------------- Colors (locked to your scheme) -------------
+    function applyColors(){
       document.querySelectorAll('#gantt .bar-wrapper').forEach(w=>{
-        const id=w.getAttribute('data-id'); const t=tasksById[id]; if(!t) return;
-        const bar=w.querySelector('.bar'); const prog=w.querySelector('.bar-progress');
-        if(!bar||!prog) return; const p=Math.max(0,Math.min(100,Number(t.progress||0)));
-        if(p===0){bar.setAttribute('fill',css('--pending'));prog.setAttribute('fill','rgba(0,0,0,0)');}
-        else if(p>=100){bar.setAttribute('fill',css('--done-base'));prog.setAttribute('fill',css('--done'));}
-        else {bar.setAttribute('fill',css('--doing')); prog.setAttribute('fill',beigeRamp(p));}
+        const id = w.getAttribute('data-id'); const t = tasksById[id]; if(!t) return;
+        const bar = w.querySelector('.bar'); const prog = w.querySelector('.bar-progress');
+        if(!bar || !prog) return;
+        const p = Math.max(0, Math.min(100, Number(t.progress||0)));
+
+        if(p === 0){
+          bar.setAttribute('fill', css('--pending'));
+          prog.setAttribute('fill', 'rgba(0,0,0,0)');
+        } else if(p >= 100){
+          bar.setAttribute('fill', css('--done-base'));
+          prog.setAttribute('fill', css('--done'));
+        } else {
+          bar.setAttribute('fill', css('--doing'));     // ash base
+          prog.setAttribute('fill', beigeRamp(p));      // deepening warm beige (no purple)
+        }
+        // Ensure no stroke comes back
+        bar.setAttribute('stroke','none'); prog.setAttribute('stroke','none');
       });
     }
 
-    function beigeRamp(p){const h=38,s=70;const l=90-(35*(p/100));return `hsl(${h},${s}%,${l}%)`; }
+    // Warm beige ramp for progress 1–99
+    function beigeRamp(p){
+      const h = 38, s = 70;            // warm beige/orange family
+      const lStart = 90, lEnd = 55;    // lighter -> deeper
+      const l = lStart + (lEnd - lStart) * (p/100);
+      return `hsl(${h}, ${s}%, ${l}%)`;
+    }
 
+    // ------------- Tooltip -------------
     function attachTooltip(){
-      const tip=document.getElementById('tip');
+      const tip = document.getElementById('tip');
       document.querySelectorAll('#gantt .bar-wrapper').forEach(w=>{
-        w.onmouseenter=()=>{const t=tasksById[w.getAttribute('data-id')];if(!t) return;
-          tip.innerHTML=`<strong>${t.name}</strong><br>${t.start} → ${t.end}<br>${t.progress}%`;tip.style.display='block';};
-        w.onmousemove=e=>{tip.style.left=(e.pageX+12)+'px';tip.style.top=(e.pageY-20)+'px';};
-        w.onmouseleave=()=>{tip.style.display='none';};
+        w.onmouseenter = () => {
+          const t = tasksById[w.getAttribute('data-id')]; if(!t) return;
+          tip.innerHTML = `<strong>${escapeHtml(t.name)}</strong><br>${t.start} → ${t.end}<br>${t.progress}%${t.notes?`<br>${escapeHtml(t.notes)}`:''}`;
+          tip.style.display = 'block';
+        };
+        w.onmousemove = e => { tip.style.left=(e.pageX+12)+'px'; tip.style.top=(e.pageY-20)+'px'; };
+        w.onmouseleave = () => { tip.style.display='none'; };
       });
     }
+    function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
   </script>
 </body>
 </html>
