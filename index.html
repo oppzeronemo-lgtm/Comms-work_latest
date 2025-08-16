@@ -14,10 +14,10 @@
 
   <style>
     :root{
-      --pending:#FFD8A8;   /* 0% (Pending) */
-      --doing:#EDE8D0;     /* 1–99% (In progress base) */
-      --done:#008000;      /* 100% (Completed overlay) */
-      --done-base:#E8F5EA; /* 100% (Completed base) */
+      --pending:#FFD8A8;   /* 0% Pending */
+      --doing:#EDE8D0;     /* 1–99% In progress base */
+      --done:#008000;      /* 100% Completed overlay */
+      --done-base:#E8F5EA; /* 100% Completed base */
       --ink:#202124; --muted:#6b7280; --border:#e5e7eb;
     }
 
@@ -38,12 +38,12 @@
     .sw.doing{background:var(--doing)}
     .sw.done{background:var(--done)}
 
-    /* Sleek flat bars (no strokes, slim) */
+    /* Flat, slim bars */
     #gantt .bar, #gantt .bar-progress { height:18px; rx:4px; ry:4px; stroke:none !important }
     #gantt .bar-wrapper{ transform:translateY(6px) }
     .gantt .bar-label{ font-weight:600; fill:#111827; font-size:13px; stroke:none }
 
-    /* Tooltips */
+    /* Tooltip */
     .tip{position:absolute;background:#fff;border:1px solid var(--border);padding:8px 10px;border-radius:8px;
          box-shadow:0 6px 16px rgba(0,0,0,.08);font-size:13px;display:none;pointer-events:none;z-index:1000}
   </style>
@@ -83,16 +83,25 @@
     const state = { view:'Week', monthKey:keyFromDate(new Date()) };
     let gantt, tasksById = {};
 
-    // ---- Init ----
+    // ---- Boot ----
     init();
     async function init(){
       buildMonthPicker();
       bindControls();
       await render();
 
-      // Re-apply color styles whenever gantt redraws (prevents default purple)
+      // Watch for any DOM / attribute changes (style/fill) and re-apply colors immediately
+      const target = document.getElementById('gantt');
       const obs = new MutationObserver(() => applyColors());
-      obs.observe(document.getElementById('gantt'), { childList:true, subtree:true });
+      obs.observe(target, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['style','fill','class','width','height']
+      });
+
+      // Also on resize
+      window.addEventListener('resize', () => { if(gantt) gantt.refresh(); applyColors(); });
     }
 
     function bindControls(){
@@ -102,7 +111,7 @@
       viewMonth.onclick = () => changeView('Month');
       refreshBtn.onclick= () => render();
     }
-    function changeView(v){ state.view=v; if(gantt){ gantt.change_view_mode(v); setTimeout(applyColors,0); } }
+    function changeView(v){ state.view=v; if(gantt){ gantt.change_view_mode(v); applyColors(); } }
 
     function buildMonthPicker(){
       const base = new Date(); base.setDate(1); monthSelect.innerHTML='';
@@ -150,36 +159,41 @@
       el.innerHTML='';
       gantt = new Gantt('#gantt', tasks, { view_mode:state.view, date_format:'YYYY-MM-DD' });
 
-      applyColors();  // first pass
-      // safety re-pass after layout/animation
-      setTimeout(applyColors, 60);
-      setTimeout(applyColors, 180);
+      // Multiple passes to beat any late style updates the lib does
+      applyColors();
+      setTimeout(applyColors, 50);
+      setTimeout(applyColors, 150);
 
       attachTooltip();
     }
 
-    // ---- Colors (force inline styles so legend == bars) ----
+    // ---- Colors (force inline fill so legend == bars) ----
     function applyColors(){
       document.querySelectorAll('#gantt .bar-wrapper').forEach(w=>{
         const t = tasksById[w.getAttribute('data-id')]; if(!t) return;
-        const bar  = w.querySelector('.bar');
+        const base = w.querySelector('.bar');
         const prog = w.querySelector('.bar-progress');
-        if(!bar || !prog) return;
+        if(!base || !prog) return;
 
         const p = Math.max(0, Math.min(100, Number(t.progress||0)));
 
-        // helpers: inline style always beats stylesheet purple
-        const setFill = (el, color) => { el.setAttribute('fill', color); el.style.fill = color; el.setAttribute('stroke','none'); };
+        // inline style beats the library’s stylesheet + any attribute changes
+        const setFill = (node, color) => {
+          node.style.fill = color;               // strongest
+          node.setAttribute('fill', color);      // backup
+          node.style.stroke = 'none';
+          node.setAttribute('stroke','none');
+        };
 
         if(p === 0){
-          setFill(bar,  css('--pending'));
+          setFill(base, css('--pending'));
           setFill(prog, 'rgba(0,0,0,0)');
         } else if(p >= 100){
-          setFill(bar,  css('--done-base'));
+          setFill(base, css('--done-base'));
           setFill(prog, css('--done'));
         } else {
-          setFill(bar,  css('--doing'));     // ash base
-          setFill(prog, beigeRamp(p));       // deepening warm beige (no purple)
+          setFill(base, css('--doing'));         // ash base
+          setFill(prog, beigeRamp(p));           // warm beige overlay (no purple)
         }
       });
     }
