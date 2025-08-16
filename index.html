@@ -5,141 +5,92 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>UDP Programme Comms Dashboard</title>
 
-  <!-- Favicon (inline, no 404) -->
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='28' fill='%23ef4444'/%3E%3C/svg%3E"/>
-
-  <!-- Frappe Gantt UMD (stable) -->
+  <!-- Frappe Gantt (UMD) -->
   <link rel="stylesheet" href="https://unpkg.com/frappe-gantt@0.6.1/dist/frappe-gantt.css" />
   <script src="https://unpkg.com/frappe-gantt@0.6.1/dist/frappe-gantt.min.js"></script>
-
   <!-- Supabase JS v2 -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-  <!-- Optional: better typography -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
-
   <style>
-    /* ===== Light theme: white, ash, beige, red ===== */
     :root{
-      --page:#ffffff;         /* page background */
-      --ink:#111827;          /* main text */
-      --muted:#6b7280;        /* ash text */
-      --line:#e5e7eb;         /* subtle borders */
-      --card:#ffffff;         /* cards */
-      --shadow:0 8px 24px rgba(17,24,39,.06);
-
-      --ash:#6b7280;          /* Task */
-      --beige:#f5efe3;        /* Done */
-      --red:#ef4444;          /* In progress */
-
-      --bar:#d1d5db;          /* base bar */
-      --barStroke:#c4c9d4;
+      --page:#ffffff; --card:#f8f7f4; --ink:#202124; --muted:#6b7280;
+      /* STATUS COLORS */
+      --pending:#cc0000;      /* Pending (red) */
+      --doing:#EDE8D0;        /* In progress (beige) */
+      --done:#008000;         /* Completed (green) */
     }
-
     html,body{height:100%}
-    body{
-      margin:0;background:var(--page);color:var(--ink);
-      font:14px/1.55 Inter, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans";
-    }
+    body{margin:0;background:var(--page);color:var(--ink);font:15px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial}
+    .wrap{max-width:1100px;margin:28px auto;padding:0 16px}
+    .topbar{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-bottom:16px}
+    .brand{display:flex;gap:10px;align-items:center}
+    .card{background:var(--card);border:1px solid rgba(0,0,0,.05);border-radius:16px;padding:16px;box-shadow:0 2px 10px rgba(0,0,0,.05)}
 
-    /* Layout */
-    .wrap{max-width:1280px;margin:24px auto;padding:0 20px}
-    .topbar{
-      display:flex;gap:16px;align-items:center;justify-content:space-between;flex-wrap:wrap;
-      background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;box-shadow:var(--shadow)
-    }
-    .brand{display:flex;gap:12px;align-items:center}
-    .dot{width:10px;height:10px;border-radius:50%;background:var(--red);box-shadow:0 0 0 6px rgba(239,68,68,.12);animation:pulse 2s infinite}
-    @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(239,68,68,.35)}70%{box-shadow:0 0 0 12px rgba(239,68,68,0)}100%{box-shadow:0 0 0 0 rgba(239,68,68,0)}}
-    .title{font-weight:700;font-size:18px}
-    .sub{color:var(--muted);font-size:12px;margin-top:2px}
+    .controls{display:flex;gap:8px;flex-wrap:wrap}
+    .controls>*{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:8px 12px;font:inherit;cursor:pointer}
 
-    .controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-    .controls>*{
-      background:#fff;color:var(--ink);border:1px solid var(--line);
-      border-radius:10px;padding:10px 12px;cursor:pointer;transition:transform .12s ease, box-shadow .12s ease
-    }
-    .controls>*:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(17,24,39,.06)}
-    select,button{font:inherit}
+    #gantt{background:#fff;border:1px solid #e5e7eb;border-radius:12px;min-height:420px;overflow:auto}
+    .legend{display:flex;gap:18px;align-items:center;color:var(--muted);font-size:13px;margin:10px 6px}
+    .sw{width:12px;height:12px;border-radius:3px;display:inline-block;margin-right:6px;border:1px solid #d1d5db}
+    .sw.pending{background:var(--pending)}
+    .sw.doing{background:var(--doing)}
+    .sw.done{background:var(--done)}
 
-    .card{
-      background:var(--card);border:1px solid var(--line);border-radius:14px;margin-top:14px;padding:12px;
-      box-shadow:var(--shadow)
-    }
+    /* ---- Gantt bar visuals ---- */
+    #gantt svg .bar{stroke-width:.10;cursor:pointer}          /* ultra-minimal stroke */
+    .gantt .bar-label{stroke:none;font-weight:500;fill:#374151;font-size:12px}
+    .gantt .bar-progress{fill:rgba(0,0,0,.05)}                 /* subtle overlay */
 
-    /* Gantt container */
-    #gantt{
-      background:#fff;border:1px solid var(--line);border-radius:12px;min-height:420px;overflow:auto;
-      transition:box-shadow .15s ease
-    }
-    #gantt:hover{box-shadow:0 10px 28px rgba(17,24,39,.06)}
+    /* IMPORTANT: class is on the wrapper, so color the inner rect via wrapper */
+    .gantt .bar-wrapper.is-todo  .bar{fill:var(--pending) !important;}  /* pending */
+    .gantt .bar-wrapper.is-doing .bar{fill:var(--doing) !important;}    /* in progress */
+    .gantt .bar-wrapper.is-done  .bar{fill:var(--done) !important;}     /* completed */
 
-    /* Legend */
-    .legend{display:flex;gap:18px;align-items:center;flex-wrap:wrap;color:var(--muted);font-size:12px;margin:10px 6px}
-    .sw{width:12px;height:12px;border-radius:3px;display:inline-block;margin-right:6px;border:1px solid var(--line)}
-    .sw.ash{background:var(--ash)}
-    .sw.beige{background:var(--beige)}
-    .sw.red{background:var(--red)}
-
-    .hint{color:var(--muted);font-size:12px;margin:8px 6px 0}
-
-    /* Frappe Gantt color overrides (minimal, readable) */
-    .gantt .bar{ fill: var(--bar); stroke: var(--barStroke); transition: filter .12s ease }
-    .gantt .bar-wrapper:hover .bar{ filter: brightness(1.04) }
-    .gantt .bar-progress{ fill: var(--red) }            /* progress is red */
-    .gantt .bar.is-done{ fill: var(--beige) }           /* completed gets beige */
-    .gantt .bar.is-task{ fill: var(--ash) }             /* plain task (0%) is ash */
-    .gantt .bar-label{ fill: var(--ink) }
-
-    /* Mobile bottom-sheet for tap details */
-    .sheet{
-      position:fixed;left:0;right:0;bottom:16px;margin:0 auto;max-width:560px;background:#fff;border:1px solid var(--line);
-      border-radius:14px;box-shadow:0 18px 36px rgba(17,24,39,.12);padding:14px 16px;z-index:9999;display:none
-    }
+    /* Tooltip (desktop) */
+    .tooltip{position:absolute;background:#fff;border:1px solid #e5e7eb;padding:8px 10px;border-radius:8px;
+             box-shadow:0 12px 28px rgba(0,0,0,.12);font-size:13px;display:none;pointer-events:none;z-index:9999;max-width:280px}
+    /* Mobile sheet (tap) */
+    .sheet{position:fixed;left:0;right:0;bottom:16px;margin:0 auto;max-width:560px;background:#fff;border:1px solid #e5e7eb;
+           border-radius:14px;box-shadow:0 18px 36px rgba(0,0,0,.12);padding:14px 16px;z-index:9999;display:none}
     .sheet h4{margin:0 28px 6px 0;font-size:16px;font-weight:600}
     .sheet .meta{font-size:12px;color:var(--muted);margin-bottom:6px}
     .sheet .notes{font-size:13px;color:#374151}
     .sheet .x{position:absolute;right:10px;top:8px;background:transparent;border:0;font-size:20px;color:#6b7280;cursor:pointer}
-
-    /* Better touch */
-    #gantt svg{ touch-action: pan-x pan-y }
-    #gantt svg .bar{ pointer-events: auto; stroke-width: 5 }
-
   </style>
 </head>
 <body>
   <div class="wrap">
     <div class="topbar">
       <div class="brand">
-        <div class="dot" title="Realtime connected"></div>
+        <div style="width:10px;height:10px;border-radius:50%;background:var(--pending)"></div>
         <div>
-          <div class="title">UDP Programme Comms Dashboard</div>
-          <div class="sub">Comms Focal: Abu Nayeem Md Shakib</div>
+          <div style="font-weight:700">UDP Programme Comms Dashboard</div>
+          <div style="color:var(--muted);font-size:12px">Comms Focal: Abu Nayeem Md Shakib</div>
         </div>
       </div>
       <div class="controls">
-        <select id="monthSelect" title="Pick month"></select>
+        <select id="monthSelect"></select>
         <button id="viewDay">Day</button>
         <button id="viewWeek">Week</button>
         <button id="viewMonth">Month</button>
-        <button id="refreshBtn" title="Refresh data">Refresh</button>
+        <button id="refreshBtn">Refresh</button>
       </div>
     </div>
 
     <div class="card">
       <div id="gantt"></div>
       <div class="legend">
-        <span><span class="sw ash"></span>Task</span>
-        <span><span class="sw beige"></span>Done</span>
-        <span><span class="sw red"></span>In progress</span>
+        <span><span class="sw pending"></span>Pending</span>
+        <span><span class="sw doing"></span>In progress</span>
+        <span><span class="sw done"></span>Completed</span>
       </div>
-      <div class="hint">Tap or hover a bar to see details. Times shown in your timezone.</div>
+      <div style="color:var(--muted);font-size:12px;margin:6px">Tap or hover a bar to see details. Times shown in your timezone.</div>
     </div>
   </div>
 
-  <!-- Mobile sheet -->
+  <!-- Hover tooltip (desktop) -->
+  <div class="tooltip" id="tooltip"></div>
+  <!-- Tap sheet (mobile) -->
   <div class="sheet" id="sheet">
     <button class="x" aria-label="Close">×</button>
     <h4 id="sTitle"></h4>
@@ -148,24 +99,12 @@
   </div>
 
   <script>
-    /* ===== Your Supabase project (given by you) ===== */
+    /* Supabase project */
     const SUPABASE_URL = "https://wjfgntocqjtwaqamlbgc.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndqZmdudG9jcWp0d2FxYW1sYmdjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUzNjQzODIsImV4cCI6MjA3MDk0MDM4Mn0.IRwC5-0cv2rkaZbzR1Ovxnt6dl0m1IwJgcLl2I67YzQ";
-
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    /* ===== Page state ===== */
     const state = { view: 'Week', monthKey: keyFromDate(new Date()) };
-    const monthSelect = document.getElementById('monthSelect');
-    const btnDay = document.getElementById('viewDay');
-    const btnWeek = document.getElementById('viewWeek');
-    const btnMonth = document.getElementById('viewMonth');
-    const refreshBtn = document.getElementById('refreshBtn');
-    const ganttEl = document.getElementById('gantt');
-    const sheet = document.getElementById('sheet');
-    const sTitle = document.getElementById('sTitle');
-    const sDates = document.getElementById('sDates');
-    const sNotes = document.getElementById('sNotes');
     let gantt;
 
     init();
@@ -178,57 +117,46 @@
     }
 
     function bindControls(){
-      btnDay.onclick   = () => setView('Day');
-      btnWeek.onclick  = () => setView('Week');
-      btnMonth.onclick = () => setView('Month');
-      refreshBtn.onclick = () => render();
       monthSelect.onchange = () => { state.monthKey = monthSelect.value; render(); };
+      viewDay.onclick = () => setView('Day');
+      viewWeek.onclick = () => setView('Week');
+      viewMonth.onclick = () => setView('Month');
+      refreshBtn.onclick = () => render();
 
-      sheet.querySelector('.x').onclick = () => sheet.style.display = 'none';
+      document.querySelector('#sheet .x').onclick = () => sheet.style.display='none';
       document.addEventListener('click', (e)=>{
         if(sheet.style.display==='none') return;
         if(!sheet.contains(e.target) && !e.target.closest('.bar-wrapper')) sheet.style.display='none';
       });
     }
-
     function setView(v){ state.view = v; if(gantt) gantt.change_view_mode(v); }
 
-    /* ===== Month picker ===== */
     function buildMonthPicker(){
-      monthSelect.innerHTML = '';
       const base = new Date(); base.setDate(1);
-      for(let o=-2; o<=9; o++){
+      monthSelect.innerHTML='';
+      for(let o=-2;o<=9;o++){
         const d = new Date(base); d.setMonth(d.getMonth()+o);
         const key = keyFromDate(d);
         const opt = document.createElement('option');
         opt.value = key;
-        opt.textContent = d.toLocaleString(undefined, { month:'long', year:'numeric' });
-        if(key === state.monthKey) opt.selected = true;
+        opt.textContent = d.toLocaleString(undefined,{month:'long',year:'numeric'});
+        if(key===state.monthKey) opt.selected = true;
         monthSelect.appendChild(opt);
       }
     }
     function keyFromDate(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; }
     function monthRangeFromKey(key){
       const [y,m] = key.split('-').map(Number);
-      const start = new Date(y, m-1, 1);
-      const end   = new Date(y, m, 0, 23, 59, 59, 999);
-      return { start, end };
+      return { start:new Date(y,m-1,1), end:new Date(y,m,0,23,59,59,999) };
     }
 
-    /* ===== Data ===== */
     async function fetchTasks(){
-      const { data, error } = await supabase.from('tasks').select('*').order('start_date', { ascending: true });
+      const { data, error } = await supabase.from('tasks').select('*').order('start_date',{ascending:true});
       if(error){ console.error(error); return []; }
-
       const { start, end } = monthRangeFromKey(state.monthKey);
-      return (data || []).filter(t => {
-        const s = new Date(t.start_date);
-        const e = new Date(t.end_date || t.start_date);
-        return e >= start && s <= end;
-      });
+      return (data||[]).filter(t => new Date(t.end_date||t.start_date)>=start && new Date(t.start_date)<=end);
     }
 
-    /* ===== Render ===== */
     async function render(){
       const rows = await fetchTasks();
       const tasks = rows.map(r => ({
@@ -239,63 +167,73 @@
         progress: Number(r.progress || 0),
         dependencies: (r.dependencies || '').trim(),
         notes: r.notes || '',
-        custom_class: (
-          Number(r.progress||0) >= 100 ? 'is-done' :
-          Number(r.progress||0) === 0 ? 'is-task' : 'is-doing'
-        )
+        /* map progress -> wrapper class used by CSS above */
+        custom_class:
+          (Number(r.progress||0) >= 100) ? 'is-done' :
+          (Number(r.progress||0) > 0)    ? 'is-doing' : 'is-todo'
       }));
 
-      window.__TASKS_BY_ID__ = Object.fromEntries(tasks.map(t => [String(t.id), t]));
+      /* keep for tooltips */
+      window.__TASK_BY_ID__ = Object.fromEntries(tasks.map(t => [String(t.id), t]));
 
-      ganttEl.innerHTML = '';
       gantt = new Gantt('#gantt', tasks, {
         view_mode: state.view,
         date_format: 'YYYY-MM-DD',
         language: 'en',
+        /* leave native popups minimal; we'll show our own tooltip/sheet using notes */
         custom_popup_html: t => `
           <div style="max-width:260px">
             <div style="font-weight:600">${escapeHtml(t.name)}</div>
-            <div style="color:var(--muted);font-size:12px">${t._start.format('ll')} → ${t._end.format('ll')} · ${t.progress}%</div>
-            ${t.notes ? `<div style="margin-top:4px;font-size:12px;color:#374151">${escapeHtml(t.notes)}</div>` : ''}
+            <div style="color:#6b7280;font-size:12px">${t._start.format('ll')} → ${t._end.format('ll')} · ${t.progress}%</div>
+            ${t.notes ? `<div style="margin-top:6px;font-size:12px;color:#374151">${escapeHtml(t.notes)}</div>` : ''}
           </div>`
       });
 
-      bindMobileTap(); // keep after each render
+      bindHoverAndTap();
     }
 
-    /* ===== Mobile tap sheet (delegation) ===== */
-    function bindMobileTap(){
-      if (window.__tapHandler__) {
-        ganttEl.removeEventListener('click', window.__tapHandler__);
-        ganttEl.removeEventListener('pointerup', window.__tapHandler__, true);
-      }
-      window.__tapHandler__ = (e)=>{
-        const group = e.target.closest && e.target.closest('.bar-wrapper');
-        if(!group) return;
-        const id = group.getAttribute('data-id');
-        const t = window.__TASKS_BY_ID__?.[id];
-        if(!t) return;
-        const s = new Date(t.start), ed = new Date(t.end);
-        sTitle.textContent = t.name;
-        sDates.textContent = `${s.toLocaleDateString()} → ${ed.toLocaleDateString()} • ${t.progress|0}%`;
-        sNotes.textContent = t.notes || '';
-        sheet.style.display = 'block';
-      };
-      ganttEl.addEventListener('click', window.__tapHandler__);
-      ganttEl.addEventListener('pointerup', window.__tapHandler__, true);
+    /* Desktop hover (shows notes). Mobile tap = bottom sheet */
+    function bindHoverAndTap(){
+      const tip = document.getElementById('tooltip');
+      const sheetEl = document.getElementById('sheet');
+
+      document.querySelectorAll('#gantt .bar-wrapper .bar').forEach(el => {
+        const wrap = el.closest('.bar-wrapper');
+        const id = wrap?.getAttribute('data-id');
+
+        // Hover (desktop)
+        el.onmouseenter = () => {
+          const t = window.__TASK_BY_ID__?.[id]; if(!t) return;
+          tip.innerHTML = `<strong>${escapeHtml(t.name)}</strong><br>${t.start} → ${t.end}${t.notes ? `<br>${escapeHtml(t.notes)}`:''}`;
+          tip.style.display = 'block';
+        };
+        el.onmousemove = e => { tip.style.left = (e.pageX+12)+'px'; tip.style.top = (e.pageY-20)+'px'; };
+        el.onmouseleave = () => { tip.style.display = 'none'; };
+
+        // Tap (mobile)
+        el.onclick = () => {
+          if (matchMedia('(hover: none) and (pointer: coarse)').matches) {
+            const t = window.__TASK_BY_ID__?.[id]; if(!t) return;
+            sTitle.textContent = t.name;
+            sDates.textContent = `${t.start} → ${t.end} • ${t.progress|0}%`;
+            sNotes.textContent = t.notes || '';
+            sheetEl.style.display = 'block';
+          }
+        };
+      });
     }
 
-    /* ===== Realtime ===== */
+    /* realtime */
     function subscribeRealtime(){
       supabase.channel('public:tasks')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, debounce(() => render(), 300))
+        .on('postgres_changes',{event:'*',schema:'public',table:'tasks'}, debounce(render,300))
         .subscribe();
     }
 
-    /* ===== Helpers ===== */
+    /* helpers */
     function toYMD(d){ const x=new Date(d); return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`; }
     function escapeHtml(s){ return String(s).replace(/[&<>\"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
-    function debounce(fn,wait){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn.apply(this,a),wait); } }
+    function debounce(fn,wait){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn.apply(this,a),wait); }; }
   </script>
 </body>
 </html>
