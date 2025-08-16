@@ -9,20 +9,22 @@
   <link rel="stylesheet" href="https://unpkg.com/frappe-gantt@0.6.1/dist/frappe-gantt.css" />
   <script src="https://unpkg.com/frappe-gantt@0.6.1/dist/frappe-gantt.min.js"></script>
 
-  <!-- Supabase -->
+  <!-- Supabase (UMD) -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <style>
-    :root {
-      --pending:#FFD8A8;   /* Pending */
-      --doing:#EDE8D0;     /* In progress base */
-      --done:#008000;      /* Completed overlay */
-      --done-base:#E8F5EA; /* Completed base */
+    :root{
+      --pending:#FFD8A8;   /* 0% (Pending) */
+      --doing:#EDE8D0;     /* 1–99% (In progress base) */
+      --done:#008000;      /* 100% (Completed overlay) */
+      --done-base:#E8F5EA; /* 100% (Completed base) */
       --ink:#202124; --muted:#6b7280; --border:#e5e7eb;
     }
 
+    html,body{height:100%}
     body{margin:0;background:#fff;color:var(--ink);font:15px/1.5 Inter,system-ui,Segoe UI,Roboto,Arial}
-    .wrap{height:100vh;display:flex;flex-direction:column;padding:16px;box-sizing:border-box}
+
+    .wrap{height:100%;display:flex;flex-direction:column;padding:16px;box-sizing:border-box}
     .top{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
     .brand{font-weight:700;font-size:18px}
     .controls>*{margin-left:6px}
@@ -36,12 +38,12 @@
     .sw.doing{background:var(--doing)}
     .sw.done{background:var(--done)}
 
-    /* Sleek flat bars */
+    /* Sleek flat bars (no strokes, slim) */
     #gantt .bar, #gantt .bar-progress { height:18px; rx:4px; ry:4px; stroke:none !important }
     #gantt .bar-wrapper{ transform:translateY(6px) }
-    .gantt .bar-label{ font-weight:600; fill:#111827; font-size:13px }
+    .gantt .bar-label{ font-weight:600; fill:#111827; font-size:13px; stroke:none }
 
-    /* Tooltip */
+    /* Tooltips */
     .tip{position:absolute;background:#fff;border:1px solid var(--border);padding:8px 10px;border-radius:8px;
          box-shadow:0 6px 16px rgba(0,0,0,.08);font-size:13px;display:none;pointer-events:none;z-index:1000}
   </style>
@@ -72,7 +74,7 @@
   <div id="tip" class="tip"></div>
 
   <script>
-    // === Supabase connection ===
+    // --- Supabase ---
     const SUPABASE_URL = "https://wjfgntocqjtwaqamlbgc.supabase.co";
     const SUPABASE_ANON_KEY =
       "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndqZmdudG9jcWp0d2FxYW1sYmdjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUzNjQzODIsImV4cCI6MjA3MDk0MDM4Mn0.IRwC5-0cv2rkaZbzR1Ovxnt6dl0m1IwJgcLl2I67YzQ";
@@ -81,13 +83,14 @@
     const state = { view:'Week', monthKey:keyFromDate(new Date()) };
     let gantt, tasksById = {};
 
+    // ---- Init ----
     init();
     async function init(){
       buildMonthPicker();
       bindControls();
       await render();
 
-      // Re-apply colors whenever DOM updates
+      // Re-apply color styles whenever gantt redraws (prevents default purple)
       const obs = new MutationObserver(() => applyColors());
       obs.observe(document.getElementById('gantt'), { childList:true, subtree:true });
     }
@@ -102,7 +105,7 @@
     function changeView(v){ state.view=v; if(gantt){ gantt.change_view_mode(v); setTimeout(applyColors,0); } }
 
     function buildMonthPicker(){
-      const base = new Date(); base.setDate(1); monthSelect.innerHTML = '';
+      const base = new Date(); base.setDate(1); monthSelect.innerHTML='';
       for(let o=-2;o<=9;o++){
         const d = new Date(base); d.setMonth(d.getMonth()+o);
         const key = keyFromDate(d);
@@ -114,11 +117,13 @@
       }
     }
 
+    // ---- Helpers ----
     function keyFromDate(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; }
     function monthRangeFromKey(key){ const [y,m]=key.split('-').map(Number); return { start:new Date(y,m-1,1), end:new Date(y,m,0,23,59,59,999) }; }
     function toYMD(d){ const x=new Date(d); return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`; }
     function css(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
 
+    // ---- Data ----
     async function fetchTasks(){
       const { data, error } = await supabase.from('tasks').select('*').order('start_date',{ascending:true});
       if(error){ console.error(error); return []; }
@@ -126,6 +131,7 @@
       return (data||[]).filter(t => new Date(t.end_date||t.start_date)>=start && new Date(t.start_date)<=end);
     }
 
+    // ---- Render ----
     async function render(){
       const rows = await fetchTasks();
       const el = document.getElementById('gantt');
@@ -141,40 +147,64 @@
       }));
       tasksById = Object.fromEntries(tasks.map(t=>[t.id,t]));
 
-      el.innerHTML = '';
+      el.innerHTML='';
       gantt = new Gantt('#gantt', tasks, { view_mode:state.view, date_format:'YYYY-MM-DD' });
 
-      applyColors();
+      applyColors();  // first pass
+      // safety re-pass after layout/animation
+      setTimeout(applyColors, 60);
+      setTimeout(applyColors, 180);
+
       attachTooltip();
     }
 
+    // ---- Colors (force inline styles so legend == bars) ----
     function applyColors(){
       document.querySelectorAll('#gantt .bar-wrapper').forEach(w=>{
         const t = tasksById[w.getAttribute('data-id')]; if(!t) return;
-        const bar = w.querySelector('.bar'); const prog = w.querySelector('.bar-progress');
+        const bar  = w.querySelector('.bar');
+        const prog = w.querySelector('.bar-progress');
         if(!bar || !prog) return;
+
         const p = Math.max(0, Math.min(100, Number(t.progress||0)));
 
-        if(p === 0){ bar.setAttribute('fill', css('--pending')); prog.setAttribute('fill','rgba(0,0,0,0)'); }
-        else if(p >= 100){ bar.setAttribute('fill', css('--done-base')); prog.setAttribute('fill', css('--done')); }
-        else { bar.setAttribute('fill', css('--doing')); prog.setAttribute('fill', beigeRamp(p)); }
+        // helpers: inline style always beats stylesheet purple
+        const setFill = (el, color) => { el.setAttribute('fill', color); el.style.fill = color; el.setAttribute('stroke','none'); };
 
-        bar.setAttribute('stroke','none'); prog.setAttribute('stroke','none');
+        if(p === 0){
+          setFill(bar,  css('--pending'));
+          setFill(prog, 'rgba(0,0,0,0)');
+        } else if(p >= 100){
+          setFill(bar,  css('--done-base'));
+          setFill(prog, css('--done'));
+        } else {
+          setFill(bar,  css('--doing'));     // ash base
+          setFill(prog, beigeRamp(p));       // deepening warm beige (no purple)
+        }
       });
     }
 
-    function beigeRamp(p){ const h=38,s=70,lStart=90,lEnd=55,l=lStart+(lEnd-lStart)*(p/100); return `hsl(${h},${s}%,${l}%)`; }
+    // Warm beige ramp for 1–99%
+    function beigeRamp(p){
+      const h=38, s=70, lStart=90, lEnd=55;
+      const l = lStart + (lEnd - lStart) * (p / 100);
+      return `hsl(${h}, ${s}%, ${l}%)`;
+    }
 
+    // ---- Tooltip ----
     function attachTooltip(){
-      const tip=document.getElementById('tip');
+      const tip = document.getElementById('tip');
       document.querySelectorAll('#gantt .bar-wrapper').forEach(w=>{
-        w.onmouseenter=()=>{ const t=tasksById[w.getAttribute('data-id')]; if(!t) return;
-          tip.innerHTML=`<strong>${t.name}</strong><br>${t.start} → ${t.end}<br>${t.progress}%${t.notes?`<br>${t.notes}`:''}`;
-          tip.style.display='block'; };
-        w.onmousemove=e=>{ tip.style.left=(e.pageX+12)+'px'; tip.style.top=(e.pageY-20)+'px'; };
-        w.onmouseleave=()=>{ tip.style.display='none'; };
+        w.onmouseenter = () => {
+          const t = tasksById[w.getAttribute('data-id')]; if(!t) return;
+          tip.innerHTML = `<strong>${escapeHtml(t.name)}</strong><br>${t.start} → ${t.end}<br>${t.progress}%${t.notes?`<br>${escapeHtml(t.notes)}`:''}`;
+          tip.style.display = 'block';
+        };
+        w.onmousemove = e => { tip.style.left=(e.pageX+12)+'px'; tip.style.top=(e.pageY-20)+'px'; };
+        w.onmouseleave = () => { tip.style.display='none'; };
       });
     }
+    function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
   </script>
 </body>
 </html>
