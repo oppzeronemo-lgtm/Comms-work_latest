@@ -4,255 +4,269 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>UDP Programme Comms Dashboard</title>
-
-  <!-- Frappe Gantt -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/frappe-gantt@0.5.0/dist/frappe-gantt.css" />
-  <script src="https://cdn.jsdelivr.net/npm/frappe-gantt@0.5.0/dist/frappe-gantt.min.js"></script>
-
-  <!-- Supabase JS v2 -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/frappe-gantt/dist/frappe-gantt.css" />
+  <script src="https://cdn.jsdelivr.net/npm/frappe-gantt/dist/frappe-gantt.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
   <style>
-    :root{
-      --bg:#ffffff; --ink:#0f172a; --muted:#64748b; --line:#e2e8f0;
-      --ash:#e2e8f0;      /* not started */
-      --beige:#f3e8d7;    /* in progress */
-      --red:#ef4444;      /* done (100%) */
-      --live:#22c55e;
+    :root {
+      --bg: #0b0c10;
+      --card: #111318;
+      --muted: #9aa4b2;
+      --text: #e8eef7;
+      --accent: #4f46e5;
+      --ok: #22c55e;
+      --warn: #f59e0b;
     }
-    html,body{height:100%;margin:0}
-    body{font:14px system-ui,-apple-system,Segoe UI,Roboto,Helvetica Neue,Arial;color:var(--ink);background:var(--bg)}
-
-    .app{min-height:100vh;display:flex;flex-direction:column}
-
-    header{
-      display:flex;justify-content:space-between;align-items:center;gap:12px;
-      padding:10px 16px;border-bottom:1px solid var(--line);background:#fff
+    html,body{height:100%}
+    body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans"; }
+    .wrap { max-width: 1100px; margin: 24px auto; padding: 0 16px; }
+    .topbar { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+    .brand { display:flex; gap:10px; align-items:center; }
+    .live-dot { width:10px; height:10px; border-radius:50%; background: var(--ok); box-shadow: 0 0 0 6px rgba(34,197,94,.15); animation: pulse 1.8s infinite; }
+    @keyframes pulse { 0%{box-shadow:0 0 0 0 rgba(34,197,94,.5)} 70%{box-shadow:0 0 0 10px rgba(34,197,94,0)} 100%{box-shadow:0 0 0 0 rgba(34,197,94,0)} }
+    .card { background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,0)); border: 1px solid rgba(255,255,255,.08); border-radius: 16px; padding: 14px; }
+    .controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .controls > * { background: var(--card); color: var(--text); border: 1px solid rgba(255,255,255,.1); border-radius: 12px; padding: 10px 12px; }
+    select,button,input{ font: inherit }
+    .hint { color: var(--muted); font-size: 12px; }
+    #gantt { overflow: auto; background: var(--card); border: 1px solid rgba(255,255,255,.08); border-radius: 16px; }
+    .legend { display:flex; gap:16px; align-items:center; flex-wrap:wrap; color: var(--muted); font-size:12px; margin-top:8px }
+    .legend .sw { width:10px; height:10px; border-radius:3px; display:inline-block; margin-right:6px; }
+    /* Mobile friendly popup */
+    .details-container { max-width: 250px; word-wrap: break-word; }
+    @media (hover: none) and (pointer: coarse) {
+      .details-container { font-size: 14px; padding: 8px; }
     }
-    .brand{display:flex;gap:8px;align-items:center}
-    .live{width:10px;height:10px;border-radius:50%;background:var(--live);
-      box-shadow:0 0 0 6px rgba(34,197,94,.15);animation:pulse 2s infinite}
-    @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(34,197,94,.4)}70%{box-shadow:0 0 0 12px rgba(34,197,94,0)}100%{box-shadow:0 0 0 0 rgba(34,197,94,0)}}
-    .controls{display:flex;gap:8px;align-items:center}
-    .controls>*{padding:8px 12px;border:1px solid var(--line);border-radius:10px;background:#fff;cursor:pointer}
+      /* Mobile tooltip/bottom-sheet for touch devices */
+    .mobile-pop{position:fixed;left:0;right:0;bottom:16px;margin:0 auto;max-width:640px;background:#0f1218;border:1px solid rgba(255,255,255,.12);border-radius:14px;box-shadow:0 12px 30px rgba(0,0,0,.4);padding:14px 16px;z-index:9999;display:none}
+    .mobile-pop h4{margin:0 28px 6px 0;font-size:16px;font-weight:600;color:#e8eef7}
+    .mobile-pop .meta{font-size:12px;color:#9aa4b2;margin-bottom:6px}
+    .mobile-pop .notes{font-size:13px;color:#cfd6e0}
+    .mobile-pop .close{position:absolute;right:10px;top:8px;cursor:pointer;background:transparent;border:0;color:#cfd6e0;font-size:20px}
 
-    main{flex:1;display:flex;flex-direction:column;gap:10px;padding:12px}
-
-    /* Gantt container – bottom scrollbar */
-    #gantt{
-      height:auto;               /* we set exact px height with JS after render */
-      border:1px solid var(--line);border-radius:10px;background:#fff;
-      overflow-x:auto;overflow-y:hidden;
-      -webkit-overflow-scrolling:touch; /* smooth swipe on iOS */
-    }
-
-    .legend{display:flex;gap:16px;align-items:center;flex-wrap:wrap;font-size:13px;color:var(--muted);padding:0 4px}
-    .legend .sw{width:12px;height:12px;border-radius:3px;border:1px solid var(--line);display:inline-block;margin-right:6px}
-
-    /* Light Gantt look */
-    .gantt .grid-row:nth-child(even){fill:#f8fafc}
-    .gantt .lower-text,.gantt .upper-text,.gantt .bar-label{fill:#0f172a;font-weight:600}
-    .gantt .bar{fill:var(--ash)}
-    .gantt .bar-progress{fill:var(--beige);transition:width .6s cubic-bezier(.22,.61,.36,1)}
-    .progress-edge{stroke:#b4a89a;stroke-width:1;shape-rendering:crispEdges}
-    .hover-hit{fill:transparent;pointer-events:all}
-
-    /* ---------- Mobile responsiveness ---------- */
-    @media (max-width: 768px){
-      header{flex-direction:column;align-items:flex-start}
-      .controls{flex-wrap:wrap;width:100%}
-      .controls>*{
-        flex:1 1 auto; min-width:96px; text-align:center;
-        padding:10px; font-size:13px; border-radius:12px;
-      }
-      main{padding:8px}
-      .legend{flex-direction:column;align-items:flex-start;gap:6px}
-      .gantt .bar-label{font-size:11px}
-    }
-  </style>
+    /* Improve touch hit area */
+    #gantt svg .bar{stroke-width:6}
+    #gantt{ -webkit-overflow-scrolling: touch; }
+    #gantt svg{ touch-action: pan-x pan-y; }
+</style>
 </head>
 <body>
-<div class="app">
-  <header>
-    <div class="brand">
-      <div class="live" title="Realtime"></div>
-      <div>
-        <div style="font-weight:700">UDP Programme Comms Dashboard</div>
-        <div style="font-size:12px;color:var(--muted)">Comms Focal: Abu Nayeem Md Shakib</div>
+  <div class="wrap">
+    <div class="topbar">
+      <div class="brand">
+        <div class="live-dot" title="Realtime connected"></div>
+        <div>
+          <div style="font-weight:600">UDP Programme Comms Dashboard</div>
+          <div class="hint">Comms Focal: Abu Nayeem Md Shakib</div>
+        </div>
+      </div>
+      <div class="controls">
+        <select id="monthSelect" title="Pick month"></select>
+        <button id="viewDay">Day</button>
+        <button id="viewWeek">Week</button>
+        <button id="viewMonth">Month</button>
+        <button id="refreshBtn" title="Force refresh">Refresh</button>
       </div>
     </div>
-    <div class="controls">
-      <select id="monthSelect" title="Pick month"></select>
-      <button id="viewDay">Day</button>
-      <button id="viewWeek">Week</button>
-      <button id="viewMonth">Month</button>
-      <button id="refreshBtn">Refresh</button>
+
+    <div class="card" style="margin-top:12px">
+      <div id="gantt"></div>
+      <div class="legend">
+        <span><span class="sw" style="background:#4f46e5"></span>Task</span>
+        <span><span class="sw" style="background:#22c55e"></span>Done</span>
+        <span><span class="sw" style="background:#f59e0b"></span>In progress</span>
+      </div>
+      <div class="hint" style="margin-top:8px">Tap on a bar to see details. Times shown in your timezone.</div>
     </div>
-  </header>
+  </div>
 
-  <main>
-    <div id="gantt"></div>
-    <div class="legend">
-      <span><span class="sw" style="background:var(--ash)"></span>Not started</span>
-      <span><span class="sw" style="background:var(--beige)"></span>In progress</span>
-      <span><span class="sw" style="background:var(--red)"></span>Done (100%)</span>
-    </div>
-  </main>
-</div>
+  <script>
+    const SUPABASE_URL = "https://YOUR-PROJECT.ref.supabase.co"; // replace
+    const SUPABASE_ANON_KEY = "YOUR-ANON-KEY"; // replace (read-only)
 
-<script>
-  // Supabase (your creds)
-  const SUPABASE_URL = "https://wjfgntocqjtwaqamlbgc.supabase.co";
-  const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndqZmdudG9jcWp0d2FxYW1sYmdjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUzNjQzODIsImV4cCI6MjA3MDk0MDM4Mn0.IRwC5-0cv2rkaZbzR1Ovxnt6dl0m1IwJgcLl2I67YzQ";
-  const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-  // State
-  const state = { view: 'Week', monthKey: monthKey(new Date()) };
-  const monthSelect = document.getElementById('monthSelect');
-  const ganttEl = document.getElementById('gantt');
-  let gantt;
+    const state = { view: 'Week', monthKey: keyFromDate(new Date()) };
 
-  // Init
-  buildMonthPicker();
-  bindControls();
-  render();
-  supabase.channel('public:tasks')
-    .on('postgres_changes', { event:'*', schema:'public', table:'tasks' }, debounce(render, 200))
-    .subscribe();
+    const monthSelect = document.getElementById('monthSelect');
+    const btnDay = document.getElementById('viewDay');
+    const btnWeek = document.getElementById('viewWeek');
+    const btnMonth = document.getElementById('viewMonth');
+    const refreshBtn = document.getElementById('refreshBtn');
+    const ganttEl = document.getElementById('gantt');
+    let gantt;
 
-  function bindControls(){
-    document.getElementById('viewDay').onclick   = () => { state.view='Day';   if(gantt){gantt.change_view_mode('Day');   fixHeight();} };
-    document.getElementById('viewWeek').onclick  = () => { state.view='Week';  if(gantt){gantt.change_view_mode('Week');  fixHeight();} };
-    document.getElementById('viewMonth').onclick = () => { state.view='Month'; if(gantt){gantt.change_view_mode('Month'); fixHeight();} };
-    document.getElementById('refreshBtn').onclick = () => render();
-    monthSelect.onchange = () => { state.monthKey = monthSelect.value; render(); };
-    window.addEventListener('resize', () => setTimeout(fixHeight, 80));
-  }
+    init();
 
-  // Month dropdown (mobile safe)
-  function buildMonthPicker(){
-    monthSelect.innerHTML = '';
-    const base = new Date(); base.setDate(1);
-    for(let o=-2; o<=9; o++){
-      const d = new Date(base); d.setMonth(d.getMonth()+o);
-      const key = monthKey(d);
-      const opt = document.createElement('option');
-      opt.value = key;
-      opt.textContent = d.toLocaleString(undefined, { month:'long', year:'numeric' });
-      if(key === state.monthKey) opt.selected = true;
-      monthSelect.appendChild(opt);
+    async function init(){
+      buildMonthPicker();
+      await render();
+      subscribeRealtime();
+      hookControls();
     }
-  }
-  function monthKey(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; }
-  function rangeFromKey(key){
-    const [y,m] = key.split('-').map(Number);
-    return { start:new Date(y,m-1,1), end:new Date(y,m,0,23,59,59,999) };
-  }
 
-  // Data
-  async function fetchTasks(){
-    const { data, error } = await supabase.from('tasks').select('*').order('start_date');
-    if(error){ console.error(error); return []; }
-    const { start, end } = rangeFromKey(state.monthKey);
-    return (data||[]).filter(t=>{
-      const s=new Date(t.start_date), e=new Date(t.end_date||t.start_date);
-      return e>=start && s<=end;
-    });
-  }
+    function hookControls(){
+      btnDay.onclick = () => setView('Day');
+      btnWeek.onclick = () => setView('Week');
+      btnMonth.onclick = () => setView('Month');
+      refreshBtn.onclick = () => render();
+      monthSelect.onchange = () => { state.monthKey = monthSelect.value; render(); };
+    }
 
-  // Draw
-  async function render(){
-    const rows = await fetchTasks();
-    const tasks = rows.map(r=>({
-      id:r.id,
-      name:r.title,
-      start:toISO(r.start_date),
-      end:toISO(r.end_date || r.start_date),
-      progress:Number(r.progress || 0),
-      notes:(r.notes ?? r.description ?? '').trim()
-    }));
+    function setView(v){ state.view = v; if(gantt) gantt.change_view_mode(v); }
 
-    ganttEl.innerHTML = '';
-    gantt = new Gantt('#gantt', tasks, {
-      view_mode: state.view,
-      bar_height: 24,
-      padding: 20,
-      custom_popup_html: t => `
-        <div style="background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 12px;max-width:min(280px, 90vw)">
-          <div style="font-weight:700">${escapeHtml(t.name)}</div>
-          <div style="color:#64748b;font-size:12px;margin-top:2px">${t._start.format('ll')} → ${t._end.format('ll')} · ${t.progress}%</div>
-          <div style="margin-top:6px;font-size:12px;color:#0f172a;max-width:90vw;word-wrap:break-word">${escapeHtml(t.notes || 'No description')}</div>
-        </div>`
-    });
+    function buildMonthPicker(){
+      monthSelect.innerHTML = '';
+      const base = new Date();
+      base.setDate(1);
+      for(let offset=-2; offset<=9; offset++){
+        const d = new Date(base);
+        d.setMonth(d.getMonth()+offset);
+        const key = keyFromDate(d);
+        const opt = document.createElement('option');
+        opt.value = key;
+        opt.textContent = d.toLocaleString(undefined, { month:'long', year:'numeric' });
+        if(key === state.monthKey) opt.selected = true;
+        monthSelect.appendChild(opt);
+      }
+    }
 
-    colorAndHover(tasks);
-    fixHeight();     // keep bottom scrollbar tight
-  }
+    function keyFromDate(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; }
 
-  // Colors + hover; 100% = hard red (inline)
-  function colorAndHover(tasks){
-    const map = Object.fromEntries(tasks.map(t => [String(t.id), t]));
-    document.querySelectorAll('.gantt .bar-wrapper').forEach(wrap => {
-      const id = wrap.getAttribute('data-id');
-      const t  = map[id];
-      const bar  = wrap.querySelector('rect.bar');
-      const prog = wrap.querySelector('rect.bar-progress');
-      if(!bar) return;
+    function monthRangeFromKey(key){
+      const [y,m] = key.split('-').map(Number);
+      const start = new Date(y, m-1, 1);
+      const end = new Date(y, m, 0, 23, 59, 59, 999);
+      return { start, end };
+    }
 
-      bar.style.fill = 'var(--ash)';
-      if(prog) prog.style.fill = 'var(--beige)';
+    async function fetchTasks(){
+      const { data, error } = await supabase
+        .from('tasks')
+        .select('*')
+        .order('start_date', { ascending: true });
+      if(error){ console.error(error); return []; }
+      const { start, end } = monthRangeFromKey(state.monthKey);
+      return (data || []).filter(t => {
+        const s = new Date(t.start_date);
+        const e = new Date(t.end_date || t.start_date);
+        return e >= start && s <= end;
+      });
+    }
 
-      if(t && t.progress >= 100){
-        bar.style.fill = 'var(--red)';
-        if(prog){
-          prog.style.fill = 'var(--red)';
-          prog.setAttribute('width', bar.getAttribute('width'));
+    async function render(){
+      const rows = await fetchTasks();
+      const tasks = rows.map(r => ({
+        id: r.id,
+        name: r.title,
+        start: formatDate(r.start_date),
+        end: formatDate(r.end_date || r.start_date),
+        progress: Number(r.progress || 0),
+        dependencies: (r.dependencies || '').trim(),
+        custom_class: progressClass(Number(r.progress || 0), r.color),
+        notes: r.notes || ''
+      }));
+
+      // Keep a quick lookup for tap details
+      window.__TASKS_BY_ID__ = Object.fromEntries(tasks.map(t => [String(t.id), t]));
+
+      ganttEl.innerHTML = '';
+      gantt = new Gantt('#gantt', tasks, {
+        view_mode: state.view,
+        date_format: 'YYYY-MM-DD',
+        language: 'en',
+        custom_popup_html: task => {
+          // Desktop hover popup remains
+          return `
+            <div class="details-container">
+              <div style="font-weight:600">${escapeHtml(task.name)}</div>
+              <div class="hint">${task._start.format('ll')} → ${task._end.format('ll')} · ${task.progress}%</div>
+              ${task.notes ? `<div style="margin-top:4px;font-size:12px;color:#9aa4b2">${escapeHtml(task.notes)}</div>` : ''}
+            </div>`;
         }
+      });
+
+      enableMobileTapPop();
+    }
+
+    // Mobile-friendly bottom sheet (tap to open)
+    function enableMobileTapPop(){
+      // Create once
+      let pop = document.querySelector('.mobile-pop');
+      if(!pop){
+        pop = document.createElement('div');
+        pop.className = 'mobile-pop';
+        pop.innerHTML = `
+          <button class="close" aria-label="Close">×</button>
+          <h4 id="pop-title"></h4>
+          <div class="meta" id="pop-dates"></div>
+          <div class="notes" id="pop-notes"></div>`;
+        document.body.appendChild(pop);
+        pop.querySelector('.close').onclick = () => pop.style.display = 'none';
+        // Close when tapping outside
+        document.addEventListener('click', (e)=>{
+          if(pop.style.display==='none') return;
+          if(!pop.contains(e.target) && !e.target.closest('.bar-wrapper')) pop.style.display='none';
+        });
       }
 
-      // separator only for 1–99%
-      let edge = wrap.querySelector('line.progress-edge');
-      if(!edge){
-        edge = document.createElementNS('http://www.w3.org/2000/svg','line');
-        edge.setAttribute('class','progress-edge'); wrap.appendChild(edge);
+      // Bind taps on bars
+      document.querySelectorAll('#gantt .bar-wrapper .bar').forEach(el => {
+        el.addEventListener('click', onTap);
+        el.addEventListener('touchstart', onTap, {passive:true});
+      });
+
+      function onTap(e){
+        const bar = e.currentTarget;
+        const group = bar.closest('.bar-wrapper');
+        const id = group?.getAttribute('data-id') || group?.querySelector('[data-id]')?.getAttribute('data-id');
+        const t = window.__TASKS_BY_ID__?.[id];
+        if(!t) return;
+        const start = new Date(t.start); const end = new Date(t.end);
+        document.getElementById('pop-title').textContent = t.name;
+        document.getElementById('pop-dates').textContent = start.toLocaleDateString() + ' → ' + end.toLocaleDateString() + ' • ' + (t.progress|0) + '%';
+        document.getElementById('pop-notes').textContent = t.notes || '';
+        const pop = document.querySelector('.mobile-pop');
+        pop.style.display = 'block';
       }
-      const pw = prog ? parseFloat(prog.getAttribute('width')||'0') : 0;
-      if(t && t.progress > 0 && t.progress < 100 && pw > 0){
-        const x = parseFloat(bar.getAttribute('x')||'0') + pw;
-        const y = parseFloat(bar.getAttribute('y')||'0');
-        const h = parseFloat(bar.getAttribute('height')||'0');
-        edge.setAttribute('x1',x); edge.setAttribute('x2',x);
-        edge.setAttribute('y1',y+1); edge.setAttribute('y2',y+h-1);
-        edge.style.display='block';
-      }else{
-        edge.style.display='none';
-      }
+    }
 
-      // full-bar hover (tooltip + popup)
-      let hit = wrap.querySelector('rect.hover-hit');
-      if(!hit){ hit = document.createElementNS('http://www.w3.org/2000/svg','rect'); hit.setAttribute('class','hover-hit'); wrap.appendChild(hit); }
-      ['x','y','width','height','rx','ry'].forEach(a=>{ const v = bar.getAttribute(a); if(v!=null) hit.setAttribute(a, v); });
-      let old = hit.querySelector('title'); if(old) old.remove();
-      const ttl = document.createElementNS('http://www.w3.org/2000/svg','title');
-      ttl.textContent = t ? `${t.name}${t.notes ? ' — ' + t.notes : ''}` : ''; hit.appendChild(ttl);
-      hit.onmouseenter = () => { if(gantt && gantt.show_popup) gantt.show_popup(t); };
-      hit.onmouseleave = () => { if(gantt && gantt.hide_popup) gantt.hide_popup(); };
-    });
-  }
+    function progressClass(p, color){
+      const base = 'gantt-task';
+      const done = p >= 100;
+      const mid = p > 0 && p < 100;
+      return `${base} ${done ? 'is-done' : mid ? 'is-doing' : 'is-todo'}`;
+    }
 
-  // keep horizontal scrollbar exactly at bottom
-  function fixHeight(){
-    const svg = ganttEl.querySelector('svg');
-    if(!svg) return;
-    let h = 0;
-    try{ h = svg.getBBox().height; }catch(e){ h = svg.getBoundingClientRect().height; }
-    ganttEl.style.height = Math.ceil(h + 40) + 'px';
-  }
+    function subscribeRealtime(){
+      supabase.channel('public:tasks')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, debounce(async () => {
+          await render();
+        }, 400))
+        .subscribe();
+    }
 
-  // utils
-  function toISO(d){ const x=new Date(d); return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`; }
-  function escapeHtml(s){ return String(s).replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#039;'}[c])); }
-  function debounce(fn,ms){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn.apply(this,a),ms); }; }
-</script>
+    function formatDate(d){
+      const x = new Date(d);
+      const yyyy = x.getFullYear();
+      const mm = String(x.getMonth()+1).padStart(2, '0');
+      const dd = String(x.getDate()).padStart(2, '0');
+      return `${yyyy}-${mm}-${dd}`;
+    }
+
+    function debounce(fn, wait){
+      let t; return (...args) => { clearTimeout(t); t = setTimeout(() => fn.apply(this,args), wait); };
+    }
+
+    function escapeHtml(s){
+      return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;','\'':'&#039;'}[c]));
+    }
+  </script>
+
+  <style>
+    .gantt .bar.is-done { opacity: .8; }
+    .gantt .bar.is-doing { filter: saturate(1.2); }
+    .gantt .bar.is-todo { opacity: .9; }
+  </style>
 </body>
 </html>
