@@ -3,32 +3,35 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Live Monthly Gantt</title>
-
-  <!-- Frappe Gantt (stable UMD build) -->
-  <link rel="stylesheet" href="https://unpkg.com/frappe-gantt@0.6.1/dist/frappe-gantt.css" />
-  <script src="https://unpkg.com/frappe-gantt@0.6.1/dist/frappe-gantt.min.js"></script>
-
-  <!-- Supabase JS v2 -->
+  <title>UDP Programme Comms Dashboard</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/frappe-gantt/dist/frappe-gantt.css" />
+  <script src="https://cdn.jsdelivr.net/npm/frappe-gantt/dist/frappe-gantt.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
   <style>
-    :root { --bg:#0b0c10; --card:#111318; --muted:#9aa4b2; --text:#e8eef7; --accent:#4f46e5; --ok:#22c55e; --warn:#f59e0b; }
+    :root {
+      --bg: #0b0c10;
+      --card: #111318;
+      --muted: #9aa4b2;
+      --text: #e8eef7;
+      --accent: #4f46e5;
+      --ok: #22c55e;
+      --warn: #f59e0b;
+    }
     html,body{height:100%}
-    body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial,"Noto Sans"}
-    .wrap{max-width:1100px;margin:24px auto;padding:0 16px}
-    .topbar{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap}
-    .brand{display:flex;gap:10px;align-items:center}
-    .live-dot{width:10px;height:10px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 6px rgba(34,197,94,.15);animation:pulse 1.8s infinite}
-    @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(34,197,94,.5)}70%{box-shadow:0 0 0 10px rgba(34,197,94,0)}100%{box-shadow:0 0 0 0 rgba(34,197,94,0)}}
-    .card{background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,0));border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:14px}
-    .controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-    .controls>*{background:var(--card);color:var(--text);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:10px 12px}
-    .hint{color:var(--muted);font-size:12px}
-    #gantt{overflow:auto;background:var(--card);border:1px solid rgba(255,255,255,.08);border-radius:16px;min-height:420px}
-    .legend{display:flex;gap:16px;align-items:center;flex-wrap:wrap;color:var(--muted);font-size:12px;margin-top:8px}
-    .legend .sw{width:10px;height:10px;border-radius:3px;display:inline-block;margin-right:6px}
-    .err{background:#2a1313;color:#ffb4b4;padding:8px 10px;border-radius:8px;margin-top:10px;display:none;white-space:pre-wrap}
+    body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji"; }
+    .wrap { max-width: 1100px; margin: 24px auto; padding: 0 16px; }
+    .topbar { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+    .brand { display:flex; gap:10px; align-items:center; }
+    .live-dot { width:10px; height:10px; border-radius:50%; background: var(--ok); box-shadow: 0 0 0 6px rgba(34,197,94,.15); animation: pulse 1.8s infinite; }
+    @keyframes pulse { 0%{box-shadow:0 0 0 0 rgba(34,197,94,.5)} 70%{box-shadow:0 0 0 10px rgba(34,197,94,0)} 100%{box-shadow:0 0 0 0 rgba(34,197,94,0)} }
+    .card { background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,0)); border: 1px solid rgba(255,255,255,.08); border-radius: 16px; padding: 14px; }
+    .controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .controls > * { background: var(--card); color: var(--text); border: 1px solid rgba(255,255,255,.1); border-radius: 12px; padding: 10px 12px; }
+    select,button,input{ font: inherit }
+    .hint { color: var(--muted); font-size: 12px; }
+    #gantt { overflow: auto; background: var(--card); border: 1px solid rgba(255,255,255,.08); border-radius: 16px; }
+    .legend { display:flex; gap:16px; align-items:center; flex-wrap:wrap; color: var(--muted); font-size:12px; margin-top:8px }
+    .legend .sw { width:10px; height:10px; border-radius:3px; display:inline-block; margin-right:6px; }
   </style>
 </head>
 <body>
@@ -37,8 +40,8 @@
       <div class="brand">
         <div class="live-dot" title="Realtime connected"></div>
         <div>
-          <div style="font-weight:600">Live Monthly Gantt</div>
-          <div class="hint">Share this link to show updates instantly</div>
+          <div style="font-weight:600">UDP Programme Comms Dashboard</div>
+          <div class="hint">Comms Focal: Abu Nayeem Md Shakib</div>
         </div>
       </div>
       <div class="controls">
@@ -58,31 +61,26 @@
         <span><span class="sw" style="background:#f59e0b"></span>In progress</span>
       </div>
       <div class="hint" style="margin-top:8px">Times show in your device timezone. For Dhaka, set Asia/Dhaka.</div>
-      <div id="err" class="err"></div>
-    </div>
-
-    <div class="hint" style="margin-top:14px">
-      Tip: update tasks in Supabase. Everyone viewing this page will see the changes live.
     </div>
   </div>
 
   <script>
-    // Supabase credentials
-    const SUPABASE_URL = "https://wjfgntocqjtwaqamlbgc.supabase.co";
-    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndqZmdudG9jcWp0d2FxYW1sYmdjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUzNjQzODIsImV4cCI6MjA3MDk0MDM4Mn0.IRwC5-0cv2rkaZbzR1Ovxnt6dl0m1IwJgcLl2I67YzQ";
+    const SUPABASE_URL = "https://YOUR-PROJECT.ref.supabase.co"; // <-- replace
+    const SUPABASE_ANON_KEY = "YOUR-ANON-KEY"; // <-- replace (read-only)
 
-    // Connect Supabase
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // State & elements
-    const state = { view: 'Week', monthKey: keyFromDate(new Date()) };
+    const state = {
+      view: 'Week',
+      monthKey: keyFromDate(new Date())
+    };
+
     const monthSelect = document.getElementById('monthSelect');
     const btnDay = document.getElementById('viewDay');
     const btnWeek = document.getElementById('viewWeek');
     const btnMonth = document.getElementById('viewMonth');
     const refreshBtn = document.getElementById('refreshBtn');
     const ganttEl = document.getElementById('gantt');
-    const errEl = document.getElementById('err');
     let gantt;
 
     init();
@@ -101,13 +99,16 @@
       refreshBtn.onclick = () => render();
       monthSelect.onchange = () => { state.monthKey = monthSelect.value; render(); };
     }
+
     function setView(v){ state.view = v; if(gantt) gantt.change_view_mode(v); }
 
     function buildMonthPicker(){
       monthSelect.innerHTML = '';
-      const base = new Date(); base.setDate(1);
-      for(let o=-2;o<=9;o++){
-        const d = new Date(base); d.setMonth(d.getMonth()+o);
+      const base = new Date();
+      base.setDate(1);
+      for(let offset=-2; offset<=9; offset++){
+        const d = new Date(base);
+        d.setMonth(d.getMonth()+offset);
         const key = keyFromDate(d);
         const opt = document.createElement('option');
         opt.value = key;
@@ -116,32 +117,28 @@
         monthSelect.appendChild(opt);
       }
     }
+
     function keyFromDate(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; }
+
     function monthRangeFromKey(key){
       const [y,m] = key.split('-').map(Number);
       const start = new Date(y, m-1, 1);
-      const end   = new Date(y, m, 0, 23, 59, 59, 999);
+      const end = new Date(y, m, 0, 23, 59, 59, 999);
       return { start, end };
     }
 
     async function fetchTasks(){
-      try {
-        const { data, error } = await supabase
-          .from('tasks')
-          .select('*')
-          .order('start_date', { ascending: true });
-        if (error) throw error;
-        const { start, end } = monthRangeFromKey(state.monthKey);
-        return (data || []).filter(t => {
-          const s = new Date(t.start_date);
-          const e = new Date(t.end_date || t.start_date);
-          return e >= start && s <= end;
-        });
-      } catch (e) {
-        showErr(`Failed to fetch from Supabase.\n• Message: ${e.message || String(e)}\n• Check URL, anon key, Exposed schemas has 'public', and Auth > URL Configuration includes https://oppzeronemo-lgtm.github.io`);
-        console.error(e);
-        return [];
-      }
+      const { data, error } = await supabase
+        .from('tasks')
+        .select('*')
+        .order('start_date', { ascending: true });
+      if(error){ console.error(error); return []; }
+      const { start, end } = monthRangeFromKey(state.monthKey);
+      return (data || []).filter(t => {
+        const s = new Date(t.start_date);
+        const e = new Date(t.end_date || t.start_date);
+        return e >= start && s <= end;
+      });
     }
 
     async function render(){
@@ -149,41 +146,66 @@
       const tasks = rows.map(r => ({
         id: r.id,
         name: r.title,
-        start: toYMD(r.start_date),
-        end: toYMD(r.end_date || r.start_date),
+        start: formatDate(r.start_date),
+        end: formatDate(r.end_date || r.start_date),
         progress: Number(r.progress || 0),
         dependencies: (r.dependencies || '').trim(),
-        custom_class: progressClass(Number(r.progress || 0))
+        custom_class: progressClass(Number(r.progress || 0), r.color),
+        notes: r.notes || ''
       }));
+
       ganttEl.innerHTML = '';
       gantt = new Gantt('#gantt', tasks, {
         view_mode: state.view,
         date_format: 'YYYY-MM-DD',
         language: 'en',
-        custom_popup_html: task => `
-          <div class="details-container">
-            <div style="font-weight:600">${escapeHtml(task.name)}</div>
-            <div class="hint">${task._start.format('ll')} → ${task._end.format('ll')} · ${task.progress}%</div>
-          </div>`
+        custom_popup_html: task => {
+          return `
+            <div class="details-container">
+              <div style="font-weight:600">${escapeHtml(task.name)}</div>
+              <div class="hint">${task._start.format('ll')} → ${task._end.format('ll')} · ${task.progress}%</div>
+              <div style="margin-top:4px;font-size:12px;color:#9aa4b2">${escapeHtml(task.notes)}</div>
+            </div>`;
+        }
       });
+    }
+
+    function progressClass(p, color){
+      const base = 'gantt-task';
+      const done = p >= 100;
+      const mid = p > 0 && p < 100;
+      return `${base} ${done ? 'is-done' : mid ? 'is-doing' : 'is-todo'}`;
     }
 
     function subscribeRealtime(){
       supabase.channel('public:tasks')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, debounce(async () => { await render(); }, 400))
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, debounce(async () => {
+          await render();
+        }, 400))
         .subscribe();
     }
 
-    // helpers
-    function progressClass(p){ const base='gantt-task'; return `${base} ${p>=100?'is-done':p>0?'is-doing':'is-todo'}`; }
-    function toYMD(d){ const x=new Date(d); const y=x.getFullYear(), m=String(x.getMonth()+1).padStart(2,'0'), dd=String(x.getDate()).padStart(2,'0'); return `${y}-${m}-${dd}`; }
-    function debounce(fn,wait){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn.apply(this,a),wait); } }
-    function escapeHtml(s){ return String(s).replace(/[&<>\"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c])); }
-    function showErr(msg){ errEl.style.display='block'; errEl.textContent = msg; }
+    function formatDate(d){
+      const x = new Date(d);
+      const yyyy = x.getFullYear();
+      const mm = String(x.getMonth()+1).padStart(2, '0');
+      const dd = String(x.getDate()).padStart(2, '0');
+      return `${yyyy}-${mm}-${dd}`;
+    }
+
+    function debounce(fn, wait){
+      let t; return (...args) => { clearTimeout(t); t = setTimeout(() => fn.apply(this,args), wait); };
+    }
+
+    function escapeHtml(s){
+      return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#039;'}[c]));
+    }
   </script>
 
   <style>
-    .gantt .bar.is-done { opacity: .8; } .gantt .bar.is-doing { filter: saturate(1.2); } .gantt .bar.is-todo { opacity: .9; }
+    .gantt .bar.is-done { opacity: .8; }
+    .gantt .bar.is-doing { filter: saturate(1.2); }
+    .gantt .bar.is-todo { opacity: .9; }
   </style>
 </body>
 </html>
