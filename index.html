@@ -13,14 +13,8 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <style>
-    :root {
-      --bg: #0b0c10;
-      --card: #111318;
-      --muted: #9aa4b2;
-      --text: #e8eef7;
-      --accent: #4f46e5;
-      --ok: #22c55e;
-      --warn: #f59e0b;
+    :root{
+      --bg:#0b0c10;--card:#111318;--muted:#9aa4b2;--text:#e8eef7;--ok:#22c55e
     }
     html,body{height:100%}
     body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Helvetica Neue,Arial}
@@ -31,13 +25,14 @@
     @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(34,197,94,.5)}70%{box-shadow:0 0 0 10px rgba(34,197,94,0)}100%{box-shadow:0 0 0 0 rgba(34,197,94,0)}}
     .card{background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,0));border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:14px}
     .controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-    .controls>*{background:var(--card);color:var(--text);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:10px 12px}
-    select,button{font:inherit}
+    .controls>*{background:#111318;color:var(--text);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:10px 12px}
     .hint{color:var(--muted);font-size:12px}
-    #gantt{overflow:auto;background:var(--card);border:1px solid rgba(255,255,255,.08);border-radius:16px}
+    #gantt{overflow:auto;background:#111318;border:1px solid rgba(255,255,255,.08);border-radius:16px}
     .legend{display:flex;gap:16px;align-items:center;flex-wrap:wrap;color:var(--muted);font-size:12px;margin-top:8px}
     .legend .sw{width:10px;height:10px;border-radius:3px;display:inline-block;margin-right:6px}
     .details-card{background:#0f1218;border:1px solid rgba(255,255,255,.1);padding:10px 12px;border-radius:10px;max-width:260px}
+    /* transparent hit area that captures hover anywhere on the bar */
+    .hover-hit{fill:transparent;pointer-events:all}
   </style>
 </head>
 <body>
@@ -112,8 +107,7 @@
         const key = keyFromDate(d);
         const opt = document.createElement('option');
         opt.value = key;
-        const label = d.toLocaleString(undefined, { month:'long', year:'numeric' });
-        opt.textContent = label;
+        opt.textContent = d.toLocaleString(undefined, { month:'long', year:'numeric' });
         if(key === state.monthKey) opt.selected = true;
         monthSelect.appendChild(opt);
       }
@@ -161,7 +155,7 @@
         return;
       }
 
-      // draw the gantt with a custom popup (click)
+      // draw the gantt with a custom popup
       gantt = new Gantt('#gantt', tasks, {
         view_mode: state.view,
         date_format: 'YYYY-MM-DD',
@@ -176,11 +170,8 @@
         }
       });
 
-      // native hover text via SVG <title>
-      injectHoverTitles(tasks);
-
-      // open/close popup on hover (not just click)
-      enableHoverPopup(tasks);
+      // enhance hover so ANYWHERE on the bar works (purple + gray + edges)
+      enhanceBarHover(tasks);
     }
 
     function statusClass(p){
@@ -194,65 +185,77 @@
         .subscribe();
     }
 
-    // --- HOVER HELPERS -------------------------------------------------------
-    function injectHoverTitles(tasks){
+    // --------------------------------------------------------------------
+    // Make hover work anywhere by inserting an invisible hit-rectangle
+    // above each bar and wiring both native <title> and popup handlers.
+    function enhanceBarHover(tasks){
       const map = Object.fromEntries(tasks.map(t => [String(t.id), t]));
-      // frappe-gantt draws <g class="bar-wrapper" data-id="..."><rect class="bar">...</g>
       document.querySelectorAll('.gantt .bar-wrapper').forEach(wrap => {
         const id = wrap.getAttribute('data-id');
-        const rect = wrap.querySelector('rect.bar');
-        if(!rect) return;
+        const bar = wrap.querySelector('rect.bar');
+        if(!bar) return;
 
-        // clear previous title
-        const old = rect.querySelector('title'); if(old) old.remove();
-
-        const t = map[id];
-        const note = (t?.notes || '').trim();
-        const hover = t ? `${t.name}${note ? ' — ' + note : ''}` : (wrap.textContent || '').trim();
-
-        const titleEl = document.createElementNS('http://www.w3.org/2000/svg','title');
-        titleEl.textContent = hover;
-        rect.appendChild(titleEl);
-      });
-    }
-
-    function enableHoverPopup(tasks){
-      const map = Object.fromEntries(tasks.map(t => [String(t.id), t]));
-      const wrappers = document.querySelectorAll('.gantt .bar-wrapper');
-
-      wrappers.forEach(wrap => {
-        const id = wrap.getAttribute('data-id');
-
-        wrap.addEventListener('mouseenter', () => {
+        // 1) Ensure both main bar and progress rects get SVG <title>
+        const progress = wrap.querySelector('rect.bar-progress');
+        [bar, progress].filter(Boolean).forEach(rect => {
+          let t = rect.querySelector('title');
+          if(t) t.remove();
           const task = map[id];
-          // prefer library API if available
-          if (gantt && typeof gantt.show_popup === 'function') {
-            gantt.show_popup(task);
-          } else {
-            // fallback: simulate click to open
-            wrap.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-          }
+          const hover = task ? `${task.name}${task.notes ? ' — ' + task.notes : ''}` : '';
+          const titleEl = document.createElementNS('http://www.w3.org/2000/svg','title');
+          titleEl.textContent = hover;
+          rect.appendChild(titleEl);
         });
 
-        wrap.addEventListener('mouseleave', () => {
-          if (gantt && typeof gantt.hide_popup === 'function') {
+        // 2) Add or update a transparent overlay to catch hover anywhere
+        let hit = wrap.querySelector('rect.hover-hit');
+        if(!hit){
+          hit = document.createElementNS('http://www.w3.org/2000/svg','rect');
+          hit.setAttribute('class','hover-hit');
+          wrap.appendChild(hit); // on top
+        }
+        // copy bar geometry
+        ['x','y','width','height','rx','ry'].forEach(attr=>{
+          const v = bar.getAttribute(attr);
+          if(v!=null) hit.setAttribute(attr, v);
+        });
+
+        // 3) Native tooltip also on the overlay
+        let t2 = hit.querySelector('title');
+        if(t2) t2.remove();
+        const task = map[id];
+        const txt = task ? `${task.name}${task.notes ? ' — ' + task.notes : ''}` : '';
+        const title2 = document.createElementNS('http://www.w3.org/2000/svg','title');
+        title2.textContent = txt;
+        hit.appendChild(title2);
+
+        // 4) Popup on hover in/out
+        hit.addEventListener('mouseenter', () => {
+          if(gantt && typeof gantt.show_popup === 'function') {
+            gantt.show_popup(task);
+          } else {
+            wrap.dispatchEvent(new MouseEvent('click', { bubbles:true }));
+          }
+        });
+        hit.addEventListener('mouseleave', () => {
+          if(gantt && typeof gantt.hide_popup === 'function') {
             gantt.hide_popup();
           }
         });
       });
     }
-    // ------------------------------------------------------------------------
+    // --------------------------------------------------------------------
 
     function formatDate(d){
       const x = new Date(d);
       const yyyy = x.getFullYear();
-      const mm = String(x.getMonth()+1).padStart(2, '0');
-      const dd = String(x.getDate()).padStart(2, '0');
+      const mm = String(x.getMonth()+1).padStart(2,'0');
+      const dd = String(x.getDate()).padStart(2,'0');
       return `${yyyy}-${mm}-${dd}`;
     }
 
     function debounce(fn, wait){
-      let t; return (...args) => { clearTimeout(t); t = setTimeout(() => fn.apply(this,args), wait); };
+      let t; return (...args)=>{ clearTimeout(t); t=setTimeout(()=>fn.apply(this,args),wait); };
     }
 
     function escapeHtml(s){
