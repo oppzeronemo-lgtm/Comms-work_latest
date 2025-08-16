@@ -15,11 +15,10 @@
   <style>
     :root{
       --page:#ffffff; --ink:#202124; --muted:#6b7280; --border:#e5e7eb; --chip:#eef2f7;
-      /* Palette */
-      --pending:#FFD8A8;    
-      --doing:#EDE8D0;      
-      --done:#008000;       
-      --done-base:#E8F5EA;  
+      --pending:#FFD8A8;    /* 0% */
+      --doing:#EDE8D0;      /* in-progress base */
+      --done:#008000;       /* 100% */
+      --done-base:#E8F5EA;  /* soft green base for completed */
     }
 
     html,body{height:100%}
@@ -36,11 +35,7 @@
     .controls>*{background:var(--chip);border:1px solid var(--border);border-radius:12px;padding:8px 12px;cursor:pointer}
 
     #stage{flex:1 1 auto;min-height:0;padding:12px}
-    #gantt{
-      height:100%;width:100%;
-      background:#fff;border:1px solid var(--border);border-radius:12px;
-      overflow:auto
-    }
+    #gantt{height:100%;width:100%;background:#fff;border:1px solid var(--border);border-radius:12px;overflow:auto}
 
     .legend{display:flex;gap:18px;align-items:center;color:var(--muted);font-size:13px;padding:10px 14px}
     .sw{width:14px;height:14px;border-radius:3px;display:inline-block;margin-right:6px;border:1px solid #d1d5db}
@@ -48,10 +43,9 @@
     .sw.doing{background:var(--doing)}
     .sw.done{background:var(--done)}
 
-    /* Thicker immersive bars */
-    #gantt .bar{ height:28px; rx:6px; ry:6px; }
-    #gantt .bar-progress{ height:28px; rx:6px; ry:6px; }
-    #gantt .bar-wrapper{ transform: translateY(6px); } /* vertical padding */
+    /* Chunkier bars */
+    #gantt .bar, #gantt .bar-progress{ height:26px; rx:6px; ry:6px; }
+    #gantt .bar-wrapper{ transform: translateY(6px); } /* vertical spacing */
     .gantt .bar-label{stroke:none;font-weight:700;fill:#111827;font-size:14px}
 
     .tooltip{
@@ -87,13 +81,14 @@
   <div id="tooltip" class="tooltip"></div>
 
   <script>
+    /* ===== Supabase config (yours) ===== */
     const SUPABASE_URL = "https://wjfgntocqjtwaqamlbgc.supabase.co";
     const SUPABASE_ANON_KEY =
       "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndqZmdudG9jcWp0d2FxYW1sYmdjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUzNjQzODIsImV4cCI6MjA3MDk0MDM4Mn0.IRwC5-0cv2rkaZbzR1Ovxnt6dl0m1IwJgcLl2I67YzQ";
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     const state = { view: 'Week', monthKey: keyFromDate(new Date()) };
-    let gantt, tasksCache = [];
+    let gantt, tasksCache = [], tasksById = {};
 
     init();
 
@@ -132,7 +127,9 @@
     }
 
     async function fetchTasks(){
-      const { data, error } = await supabase.from('tasks').select('*').order('start_date',{ascending:true});
+      const { data, error } = await supabase.from('tasks')
+        .select('*')
+        .order('start_date',{ascending:true});
       if(error){ console.error(error); return []; }
       const { start, end } = monthRangeFromKey(state.monthKey);
       return (data||[]).filter(t => new Date(t.end_date||t.start_date)>=start && new Date(t.start_date)<=end);
@@ -141,14 +138,14 @@
     async function render(){
       const rows = await fetchTasks();
       tasksCache = rows.map(r => ({
-        id: r.id,
+        id: String(r.id),
         name: r.title,
         start: toYMD(r.start_date),
         end: toYMD(r.end_date || r.start_date),
-        progress: Number(r.progress || 0),
-        dependencies: (r.dependencies || '').trim(),
-        notes: r.notes || '',
+        progress: Number(r.progress ?? 0),
+        notes: r.notes || ''
       }));
+      tasksById = Object.fromEntries(tasksCache.map(t => [t.id, t]));
 
       document.getElementById('gantt').innerHTML='';
       gantt = new Gantt('#gantt', tasksCache, {
@@ -157,50 +154,49 @@
         language:'en'
       });
 
-      paintBars();
-      attachTooltip();
+      colorizeBars();   // <- locks your theme (no purple)
+      attachTooltip();  // hover/tap notes
     }
 
-    function paintBars(){
-      tasksCache.forEach(t => {
-        const wrap = document.querySelector(`#gantt .bar-wrapper[data-id="${t.id}"]`);
-        if(!wrap) return;
-        const bar  = wrap.querySelector('.bar');
-        const prog = wrap.querySelector('.bar-progress');
+    // --- Color logic (fresh + simple) ---
+    function colorizeBars(){
+      document.querySelectorAll('#gantt .bar-wrapper').forEach(w => {
+        const id = w.getAttribute('data-id');
+        const t = tasksById[id]; if(!t) return;
+        const bar  = w.querySelector('.bar');
+        const prog = w.querySelector('.bar-progress');
         if(!bar || !prog) return;
 
-        const p = Math.max(0, Math.min(100, Number(t.progress||0)));
+        const p = clamp(Number(t.progress || 0), 0, 100);
 
         if(p === 0){
-          bar.setAttribute('fill', getCSS('--pending'));
+          bar.setAttribute('fill', css('--pending'));
           prog.setAttribute('fill','rgba(0,0,0,0)');
-          return;
+        } else if(p >= 100){
+          bar.setAttribute('fill', css('--done-base'));
+          prog.setAttribute('fill', css('--done'));
+        } else {
+          bar.setAttribute('fill', css('--doing'));      // ash base
+          prog.setAttribute('fill', beigeRamp(p));       // deeper beige as % grows
         }
-        if(p >= 100){
-          bar.setAttribute('fill', getCSS('--done-base'));
-          prog.setAttribute('fill', getCSS('--done'));
-          return;
-        }
-
-        bar.setAttribute('fill', getCSS('--doing'));
-        prog.setAttribute('fill', beigeRamp(p));
       });
     }
 
+    // warm beige ramp (HSL) for overlay
     function beigeRamp(p){
-      const h = 38, s = 60; 
+      const h = 38, s = 60;       // warm hue
       const lStart = 92, lEnd = 45;
       const l = lStart + (lEnd - lStart) * (p/100);
       return `hsl(${h}, ${s}%, ${l}%)`;
     }
 
+    // --- Tooltip with notes ---
     function attachTooltip(){
       const tip = document.getElementById('tooltip');
       document.querySelectorAll('#gantt .bar-wrapper').forEach(w => {
         w.onmouseenter = () => {
           const id = w.getAttribute('data-id');
-          const t = tasksCache.find(x => String(x.id) === String(id));
-          if(!t) return;
+          const t = tasksById[id]; if(!t) return;
           tip.innerHTML = `<strong>${escapeHtml(t.name)}</strong><br>${t.start} → ${t.end}<br>${t.progress}%${t.notes?`<br>${escapeHtml(t.notes)}`:''}`;
           tip.style.display = 'block';
         };
@@ -209,20 +205,21 @@
       });
     }
 
+    // realtime refresh
     function subscribeRealtime(){
       supabase.channel('public:tasks')
-        .on('postgres_changes',{event:'*',schema:'public',table:'tasks'}, () => { render(); })
+        .on('postgres_changes',{event:'*',schema:'public',table:'tasks'}, () => render())
         .subscribe();
     }
 
     // utils
     function toYMD(d){ const x=new Date(d); return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`; }
-    function getCSS(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+    function css(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+    function clamp(v, lo, hi){ return Math.max(lo, Math.min(hi, v)); }
     function escapeHtml(s){
-      return String(s).replace(/[&<>"']/g, (c) => ({
-        '&': '&amp;','<': '&lt;','>': '&gt;','"': '&quot;',"'": '&#39;'
-      })[c]);
+      return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     }
+    function keyFromDate(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; }
   </script>
 </body>
 </html>
