@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>UDP Programme Comms Dashboard</title>
+  <title>Live Monthly Gantt</title>
 
-  <!-- Frappe Gantt: UMD build (not ESM) + cache-bust -->
-  <link rel="stylesheet" href="https://unpkg.com/frappe-gantt@0.6.1/dist/frappe-gantt.css?v=2" />
-  <script src="https://unpkg.com/frappe-gantt@0.6.1/dist/frappe-gantt.min.js?v=2"></script>
+  <!-- Frappe Gantt (stable UMD build) -->
+  <link rel="stylesheet" href="https://unpkg.com/frappe-gantt@0.6.1/dist/frappe-gantt.css" />
+  <script src="https://unpkg.com/frappe-gantt@0.6.1/dist/frappe-gantt.min.js"></script>
 
   <!-- Supabase JS v2 -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2?ver=2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <style>
     :root { --bg:#0b0c10; --card:#111318; --muted:#9aa4b2; --text:#e8eef7; --accent:#4f46e5; --ok:#22c55e; --warn:#f59e0b; }
@@ -25,18 +25,9 @@
     .controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
     .controls>*{background:var(--card);color:var(--text);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:10px 12px}
     .hint{color:var(--muted);font-size:12px}
-    #gantt{overflow:auto;background:var(--card);border:1px solid rgba(255,255,255,.08);border-radius:16px;min-height:420px;-webkit-overflow-scrolling:touch}
+    #gantt{overflow:auto;background:var(--card);border:1px solid rgba(255,255,255,.08);border-radius:16px;min-height:420px}
     .legend{display:flex;gap:16px;align-items:center;flex-wrap:wrap;color:var(--muted);font-size:12px;margin-top:8px}
     .legend .sw{width:10px;height:10px;border-radius:3px;display:inline-block;margin-right:6px}
-    /* mobile bottom-sheet */
-    .mobile-pop{position:fixed;left:0;right:0;bottom:16px;margin:0 auto;max-width:640px;background:#0f1218;border:1px solid rgba(255,255,255,.12);border-radius:14px;box-shadow:0 12px 30px rgba(0,0,0,.4);padding:14px 16px;z-index:9999;display:none}
-    .mobile-pop h4{margin:0 28px 6px 0;font-size:16px;font-weight:600;color:#e8eef7}
-    .mobile-pop .meta{font-size:12px;color:#9aa4b2;margin-bottom:6px}
-    .mobile-pop .notes{font-size:13px;color:#cfd6e0}
-    .mobile-pop .close{position:absolute;right:10px;top:8px;cursor:pointer;background:transparent;border:0;color:#cfd6e0;font-size:20px}
-    /* better touch targets */
-    #gantt svg{touch-action:pan-x pan-y}
-    #gantt svg .bar{stroke-width:6;pointer-events:auto}
     .err{background:#2a1313;color:#ffb4b4;padding:8px 10px;border-radius:8px;margin-top:10px;display:none;white-space:pre-wrap}
   </style>
 </head>
@@ -46,8 +37,8 @@
       <div class="brand">
         <div class="live-dot" title="Realtime connected"></div>
         <div>
-          <div style="font-weight:600">UDP Programme Comms Dashboard</div>
-          <div class="hint">Comms Focal: Abu Nayeem Md Shakib</div>
+          <div style="font-weight:600">Live Monthly Gantt</div>
+          <div class="hint">Share this link to show updates instantly</div>
         </div>
       </div>
       <div class="controls">
@@ -66,38 +57,24 @@
         <span><span class="sw" style="background:#22c55e"></span>Done</span>
         <span><span class="sw" style="background:#f59e0b"></span>In progress</span>
       </div>
-      <div class="hint" style="margin-top:8px">Hover (desktop) or tap (mobile) a bar to see details.</div>
+      <div class="hint" style="margin-top:8px">Times show in your device timezone. For Dhaka, set Asia/Dhaka.</div>
       <div id="err" class="err"></div>
     </div>
 
-    <!-- mobile sheet -->
-    <div class="mobile-pop" id="mPop">
-      <button class="close" aria-label="Close">×</button>
-      <h4 id="pop-title"></h4>
-      <div class="meta" id="pop-dates"></div>
-      <div class="notes" id="pop-notes"></div>
+    <div class="hint" style="margin-top:14px">
+      Tip: update tasks in Supabase. Everyone viewing this page will see the changes live.
     </div>
   </div>
 
   <script>
-    // 1) your Supabase credentials
+    // Supabase credentials
     const SUPABASE_URL = "https://wjfgntocqjtwaqamlbgc.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndqZmdudG9jcWp0d2FxYW1sYmdjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUzNjQzODIsImV4cCI6MjA3MDk0MDM4Mn0.IRwC5-0cv2rkaZbzR1Ovxnt6dl0m1IwJgcLl2I67YzQ";
 
-    // 2) connect
+    // Connect Supabase
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // quick self-test so we don’t chase ghosts
-    console.log("SUPABASE_URL:", SUPABASE_URL);
-    (async () => {
-      try {
-        const ping = await fetch(`${SUPABASE_URL}/rest/v1/`, { headers: { apikey: SUPABASE_ANON_KEY }});
-        console.log("REST ping status:", ping.status);
-      } catch (e) {
-        showErr("Network/CORS blocked: " + (e.message || e));
-      }
-    })();
-
+    // State & elements
     const state = { view: 'Week', monthKey: keyFromDate(new Date()) };
     const monthSelect = document.getElementById('monthSelect');
     const btnDay = document.getElementById('viewDay');
@@ -105,7 +82,6 @@
     const btnMonth = document.getElementById('viewMonth');
     const refreshBtn = document.getElementById('refreshBtn');
     const ganttEl = document.getElementById('gantt');
-    const mPop = document.getElementById('mPop');
     const errEl = document.getElementById('err');
     let gantt;
 
@@ -124,13 +100,7 @@
       btnMonth.onclick = () => setView('Month');
       refreshBtn.onclick = () => render();
       monthSelect.onchange = () => { state.monthKey = monthSelect.value; render(); };
-      mPop.querySelector('.close').onclick = () => mPop.style.display = 'none';
-      document.addEventListener('click', (e)=>{
-        if(mPop.style.display==='none') return;
-        if(!mPop.contains(e.target) && !e.target.closest('.bar-wrapper')) mPop.style.display='none';
-      });
     }
-
     function setView(v){ state.view = v; if(gantt) gantt.change_view_mode(v); }
 
     function buildMonthPicker(){
@@ -146,7 +116,6 @@
         monthSelect.appendChild(opt);
       }
     }
-
     function keyFromDate(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; }
     function monthRangeFromKey(key){
       const [y,m] = key.split('-').map(Number);
@@ -157,7 +126,10 @@
 
     async function fetchTasks(){
       try {
-        const { data, error } = await supabase.from('tasks').select('*').order('start_date', { ascending: true });
+        const { data, error } = await supabase
+          .from('tasks')
+          .select('*')
+          .order('start_date', { ascending: true });
         if (error) throw error;
         const { start, end } = monthRangeFromKey(state.monthKey);
         return (data || []).filter(t => {
@@ -166,7 +138,8 @@
           return e >= start && s <= end;
         });
       } catch (e) {
-        showErr("Failed to fetch tasks: " + (e.message || e));
+        showErr(`Failed to fetch from Supabase.\n• Message: ${e.message || String(e)}\n• Check URL, anon key, Exposed schemas has 'public', and Auth > URL Configuration includes https://oppzeronemo-lgtm.github.io`);
+        console.error(e);
         return [];
       }
     }
@@ -180,66 +153,37 @@
         end: toYMD(r.end_date || r.start_date),
         progress: Number(r.progress || 0),
         dependencies: (r.dependencies || '').trim(),
-        notes: r.notes || ''
+        custom_class: progressClass(Number(r.progress || 0))
       }));
-
-      // lookup for taps
-      window.__TASKS_BY_ID__ = Object.fromEntries(tasks.map(t => [String(t.id), t]));
-
       ganttEl.innerHTML = '';
-      if (typeof Gantt === "undefined") {
-        showErr("Gantt library failed to load. If you still see 'Unexpected token export', your browser cached the wrong build. Do a hard refresh (Ctrl/Cmd+Shift+R).");
-        return;
-      }
       gantt = new Gantt('#gantt', tasks, {
         view_mode: state.view,
         date_format: 'YYYY-MM-DD',
         language: 'en',
         custom_popup_html: task => `
-          <div class="details-container" style="max-width:260px">
+          <div class="details-container">
             <div style="font-weight:600">${escapeHtml(task.name)}</div>
             <div class="hint">${task._start.format('ll')} → ${task._end.format('ll')} · ${task.progress}%</div>
-            ${task.notes ? `<div style="margin-top:4px;font-size:12px;color:#9aa4b2">${escapeHtml(task.notes)}</div>` : ''}
           </div>`
       });
-
-      // bind mobile taps (delegation so it survives rerenders)
-      bindMobileTap();
     }
-
-    function bindMobileTap(){
-      const handler = (e) => {
-        const group = e.target.closest && e.target.closest('.bar-wrapper');
-        if(!group) return;
-        const id = group.getAttribute('data-id');
-        const t = window.__TASKS_BY_ID__ && window.__TASKS_BY_ID__[id];
-        if(!t) return;
-        const s = new Date(t.start); const ed = new Date(t.end);
-        document.getElementById('pop-title').textContent = t.name;
-        document.getElementById('pop-dates').textContent = s.toLocaleDateString() + ' → ' + ed.toLocaleDateString() + ' • ' + (t.progress|0) + '%';
-        document.getElementById('pop-notes').textContent = t.notes || '';
-        document.getElementById('mPop').style.display = 'block';
-      };
-
-      if (window.__tapHandler__) {
-        ganttEl.removeEventListener('click', window.__tapHandler__);
-        ganttEl.removeEventListener('pointerup', window.__tapHandler__, true);
-      }
-      window.__tapHandler__ = handler;
-      ganttEl.addEventListener('click', handler);
-      ganttEl.addEventListener('pointerup', handler, true);
-    }
-
-    function toYMD(d){ const x=new Date(d); const y=x.getFullYear(), m=String(x.getMonth()+1).padStart(2,'0'), dd=String(x.getDate()).padStart(2,'0'); return `${y}-${m}-${dd}`; }
-    function escapeHtml(s){ return String(s).replace(/[&<>\"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c])); }
-    function showErr(msg){ const el=document.getElementById('err'); el.style.display='block'; el.textContent = msg; }
 
     function subscribeRealtime(){
       supabase.channel('public:tasks')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, debounce(async () => { await render(); }, 400))
         .subscribe();
     }
+
+    // helpers
+    function progressClass(p){ const base='gantt-task'; return `${base} ${p>=100?'is-done':p>0?'is-doing':'is-todo'}`; }
+    function toYMD(d){ const x=new Date(d); const y=x.getFullYear(), m=String(x.getMonth()+1).padStart(2,'0'), dd=String(x.getDate()).padStart(2,'0'); return `${y}-${m}-${dd}`; }
     function debounce(fn,wait){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn.apply(this,a),wait); } }
+    function escapeHtml(s){ return String(s).replace(/[&<>\"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c])); }
+    function showErr(msg){ errEl.style.display='block'; errEl.textContent = msg; }
   </script>
+
+  <style>
+    .gantt .bar.is-done { opacity: .8; } .gantt .bar.is-doing { filter: saturate(1.2); } .gantt .bar.is-todo { opacity: .9; }
+  </style>
 </body>
 </html>
