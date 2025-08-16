@@ -5,12 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>UDP Programme Comms Dashboard</title>
 
-  <!-- Frappe Gantt (stable UMD build) -->
-  <link rel="stylesheet" href="https://unpkg.com/frappe-gantt@0.6.1/dist/frappe-gantt.css" />
-  <script src="https://unpkg.com/frappe-gantt@0.6.1/dist/frappe-gantt.min.js"></script>
+  <!-- Frappe Gantt: UMD build (not ESM) + cache-bust -->
+  <link rel="stylesheet" href="https://unpkg.com/frappe-gantt@0.6.1/dist/frappe-gantt.css?v=2" />
+  <script src="https://unpkg.com/frappe-gantt@0.6.1/dist/frappe-gantt.min.js?v=2"></script>
 
   <!-- Supabase JS v2 -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2?ver=2"></script>
 
   <style>
     :root { --bg:#0b0c10; --card:#111318; --muted:#9aa4b2; --text:#e8eef7; --accent:#4f46e5; --ok:#22c55e; --warn:#f59e0b; }
@@ -37,6 +37,7 @@
     /* better touch targets */
     #gantt svg{touch-action:pan-x pan-y}
     #gantt svg .bar{stroke-width:6;pointer-events:auto}
+    .err{background:#2a1313;color:#ffb4b4;padding:8px 10px;border-radius:8px;margin-top:10px;display:none;white-space:pre-wrap}
   </style>
 </head>
 <body>
@@ -66,6 +67,7 @@
         <span><span class="sw" style="background:#f59e0b"></span>In progress</span>
       </div>
       <div class="hint" style="margin-top:8px">Hover (desktop) or tap (mobile) a bar to see details.</div>
+      <div id="err" class="err"></div>
     </div>
 
     <!-- mobile sheet -->
@@ -85,6 +87,17 @@
     // 2) connect
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+    // quick self-test so we don’t chase ghosts
+    console.log("SUPABASE_URL:", SUPABASE_URL);
+    (async () => {
+      try {
+        const ping = await fetch(`${SUPABASE_URL}/rest/v1/`, { headers: { apikey: SUPABASE_ANON_KEY }});
+        console.log("REST ping status:", ping.status);
+      } catch (e) {
+        showErr("Network/CORS blocked: " + (e.message || e));
+      }
+    })();
+
     const state = { view: 'Week', monthKey: keyFromDate(new Date()) };
     const monthSelect = document.getElementById('monthSelect');
     const btnDay = document.getElementById('viewDay');
@@ -93,6 +106,7 @@
     const refreshBtn = document.getElementById('refreshBtn');
     const ganttEl = document.getElementById('gantt');
     const mPop = document.getElementById('mPop');
+    const errEl = document.getElementById('err');
     let gantt;
 
     init();
@@ -142,14 +156,19 @@
     }
 
     async function fetchTasks(){
-      const { data, error } = await supabase.from('tasks').select('*').order('start_date', { ascending: true });
-      if (error) { console.error(error); return []; }
-      const { start, end } = monthRangeFromKey(state.monthKey);
-      return (data || []).filter(t => {
-        const s = new Date(t.start_date);
-        const e = new Date(t.end_date || t.start_date);
-        return e >= start && s <= end;
-      });
+      try {
+        const { data, error } = await supabase.from('tasks').select('*').order('start_date', { ascending: true });
+        if (error) throw error;
+        const { start, end } = monthRangeFromKey(state.monthKey);
+        return (data || []).filter(t => {
+          const s = new Date(t.start_date);
+          const e = new Date(t.end_date || t.start_date);
+          return e >= start && s <= end;
+        });
+      } catch (e) {
+        showErr("Failed to fetch tasks: " + (e.message || e));
+        return [];
+      }
     }
 
     async function render(){
@@ -168,6 +187,10 @@
       window.__TASKS_BY_ID__ = Object.fromEntries(tasks.map(t => [String(t.id), t]));
 
       ganttEl.innerHTML = '';
+      if (typeof Gantt === "undefined") {
+        showErr("Gantt library failed to load. If you still see 'Unexpected token export', your browser cached the wrong build. Do a hard refresh (Ctrl/Cmd+Shift+R).");
+        return;
+      }
       gantt = new Gantt('#gantt', tasks, {
         view_mode: state.view,
         date_format: 'YYYY-MM-DD',
@@ -195,10 +218,9 @@
         document.getElementById('pop-title').textContent = t.name;
         document.getElementById('pop-dates').textContent = s.toLocaleDateString() + ' → ' + ed.toLocaleDateString() + ' • ' + (t.progress|0) + '%';
         document.getElementById('pop-notes').textContent = t.notes || '';
-        mPop.style.display = 'block';
+        document.getElementById('mPop').style.display = 'block';
       };
 
-      // remove old then add fresh
       if (window.__tapHandler__) {
         ganttEl.removeEventListener('click', window.__tapHandler__);
         ganttEl.removeEventListener('pointerup', window.__tapHandler__, true);
@@ -210,6 +232,7 @@
 
     function toYMD(d){ const x=new Date(d); const y=x.getFullYear(), m=String(x.getMonth()+1).padStart(2,'0'), dd=String(x.getDate()).padStart(2,'0'); return `${y}-${m}-${dd}`; }
     function escapeHtml(s){ return String(s).replace(/[&<>\"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c])); }
+    function showErr(msg){ const el=document.getElementById('err'); el.style.display='block'; el.textContent = msg; }
 
     function subscribeRealtime(){
       supabase.channel('public:tasks')
