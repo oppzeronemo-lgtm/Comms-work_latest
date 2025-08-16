@@ -14,85 +14,66 @@
 
   <style>
     :root{
-      --bg:#ffffff;          /* page background */
-      --ink:#0f172a;         /* main text */
-      --muted:#64748b;       /* secondary text */
-      --line:#e2e8f0;        /* borders */
-      --brand:#111827;       /* header text */
-      --bar:#4f46e5;         /* bar color (indigo 600) */
-      --progress:#111827;    /* progress overlay (near-black) */
-      --done:#16a34a;        /* green */
-      --warn:#f59e0b;        /* amber */
-      --ok:#22c55e;          /* live dot */
-      --card:#ffffff;        /* card bg */
-      --shadow:0 8px 24px rgba(2,6,23,.06);
+      --headerH:64px;
+      --bg:#ffffff; --ink:#0f172a; --muted:#64748b; --line:#e2e8f0;
+      --bar:#4f46e5; --progress:#111827; --done:#16a34a; --ok:#22c55e;
     }
     *{box-sizing:border-box}
     html,body{height:100%}
-    body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.55 system-ui,-apple-system,Segoe UI,Roboto,Helvetica Neue,Arial}
-    .app{display:flex;flex-direction:column;min-height:100vh}
-    .topbar{
-      position:sticky;top:0;z-index:10;background:var(--bg);
-      border-bottom:1px solid var(--line);
-      display:flex;gap:16px;align-items:center;justify-content:space-between;
-      padding:14px 20px
+    body{margin:0;background:#fff;color:var(--ink);font:14px/1.55 system-ui,-apple-system,Segoe UI,Roboto,Helvetica Neue,Arial}
+
+    /* layout */
+    .app{min-height:100vh;display:flex;flex-direction:column}
+    header{
+      height:var(--headerH);display:flex;align-items:center;justify-content:space-between;
+      gap:16px;padding:0 20px;border-bottom:1px solid var(--line);background:#fff;position:sticky;top:0;z-index:5
     }
     .brand{display:flex;gap:10px;align-items:center}
-    .live-dot{width:10px;height:10px;border-radius:50%;background:var(--ok);
-      box-shadow:0 0 0 6px rgba(34,197,94,.15); animation:pulse 1.8s infinite}
-    @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(34,197,94,.45)}70%{box-shadow:0 0 0 14px rgba(34,197,94,0)}100%{box-shadow:0 0 0 0 rgba(34,197,94,0)}}
-    .title{font-weight:700;color:var(--brand)}
+    .title{font-weight:700}
     .subtitle{color:var(--muted);font-size:12px;margin-top:2px}
+    .live{width:10px;height:10px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 6px rgba(34,197,94,.15);animation:pulse 1.8s infinite}
+    @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(34,197,94,.4)}70%{box-shadow:0 0 0 14px rgba(34,197,94,0)}100%{box-shadow:0 0 0 0 rgba(34,197,94,0)}}
     .controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-    .controls>*{
-      background:#fff;color:var(--ink);border:1px solid var(--line);
-      border-radius:10px;padding:8px 12px;box-shadow:var(--shadow)
-    }
+    .controls>*{background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px 12px}
     select,button{font:inherit;cursor:pointer}
-    main{flex:1;display:flex}
-    .card{
-      width:100%;max-width:1200px;margin:18px auto;padding:16px;border:1px solid var(--line);
-      border-radius:14px;background:var(--card);box-shadow:var(--shadow);
-      display:flex;flex-direction:column;min-height:calc(100vh - 120px)
-    }
-    #gantt{flex:1;min-height:420px;border:1px solid var(--line);border-radius:12px;overflow:auto}
-    .legend{
-      display:flex;gap:18px;align-items:center;flex-wrap:wrap;
-      color:var(--muted);font-size:12px;margin-top:10px
-    }
-    .legend .label{font-weight:600;color:var(--ink);margin-right:6px}
-    .sw{width:12px;height:12px;border-radius:3px;display:inline-block;margin-right:6px;border:1px solid var(--line)}
-    .hint{color:var(--muted);font-size:12px;margin-top:6px}
 
-    /* Light theme for Gantt bars */
-    .gantt .bar{fill:var(--bar); opacity:.95; transition:opacity .25s ease}
+    main{flex:1;display:flex;flex-direction:column}
+    /* full-page canvas */
+    .canvas{
+      flex:1;display:flex;flex-direction:column;gap:10px;
+      padding:14px 16px 16px 16px;
+      height:calc(100vh - var(--headerH));
+    }
+    #gantt{
+      flex:1;min-height:60vh;border:1px solid var(--line);border-radius:12px;overflow:auto;background:#fff
+    }
+
+    /* legend */
+    .legend{display:flex;gap:18px;align-items:center;flex-wrap:wrap;color:var(--muted);font-size:12px}
+    .legend .label{font-weight:600;color:var(--ink)}
+    .sw{width:12px;height:12px;border-radius:3px;display:inline-block;margin-right:6px;border:1px solid var(--line)}
+
+    .hint{color:var(--muted);font-size:12px}
+
+    /* light theme for Frappe Gantt */
+    .gantt .bar{fill:var(--bar);opacity:.95;transition:opacity .25s ease}
     .gantt .bar:hover{opacity:1}
-    .gantt .bar-progress{fill:var(--progress)}
-    .gantt .lower-text,.gantt .upper-text{fill:#0f172a}
+    .gantt .bar-progress{fill:var(--progress);transition:width .6s cubic-bezier(.22,.61,.36,1)}
     .gantt .grid-row{fill:#fff}
     .gantt .grid-row:nth-child(even){fill:#f8fafc}
-    .gantt .grid-header{fill:#fff}
     .gantt .grid-header rect{fill:#fff}
+    .gantt .lower-text,.gantt .upper-text{fill:#0f172a}
     .gantt .today-highlight{fill:#f1f5f9}
 
-    /* Smooth width resize for progress rectangles (SVG supports this in modern browsers) */
-    .gantt .bar-progress{transition:width .6s cubic-bezier(.22,.61,.36,1)}
-
-    /* Loading shimmer */
-    .skeleton{position:relative;overflow:hidden;border-radius:12px;background:#f1f5f9;border:1px solid var(--line);height:260px}
-    .skeleton::after{
-      content:"";position:absolute;inset:0;transform:translateX(-100%);
-      background:linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,.6) 50%, rgba(255,255,255,0) 100%);
-      animation:shimmer 1.3s infinite
-    }
-    @keyframes shimmer{100%{transform:translateX(100%)}}
+    /* transparent hit area to capture hover anywhere */
+    .hover-hit{fill:transparent;pointer-events:all}
   </style>
 </head>
 <body>
   <div class="app">
-    <header class="topbar">
+    <header>
       <div class="brand">
-        <div class="live-dot" title="Realtime"></div>
+        <div class="live" title="Realtime"></div>
         <div>
           <div class="title">UDP Programme Comms Dashboard</div>
           <div class="subtitle">Comms Focal: Abu Nayeem Md Shakib</div>
@@ -108,9 +89,8 @@
     </header>
 
     <main>
-      <section class="card">
-        <div id="ganttSkeleton" class="skeleton"></div>
-        <div id="gantt" style="display:none"></div>
+      <section class="canvas">
+        <div id="gantt"></div>
 
         <div class="legend">
           <span class="label">Task progress</span>
@@ -131,29 +111,29 @@
 
     const state = { view: 'Week', monthKey: keyFromDate(new Date()) };
     const monthSelect = document.getElementById('monthSelect');
-    const btnDay = document.getElementById('viewDay');
-    const btnWeek = document.getElementById('viewWeek');
+    const btnDay   = document.getElementById('viewDay');
+    const btnWeek  = document.getElementById('viewWeek');
     const btnMonth = document.getElementById('viewMonth');
     const refreshBtn = document.getElementById('refreshBtn');
     const ganttEl = document.getElementById('gantt');
-    const skeleton = document.getElementById('ganttSkeleton');
     let gantt;
 
     init();
 
     async function init(){
       buildMonthPicker();
-      await render();               // first paint
-      subscribeRealtime();          // live updates
-      hookControls();
-    }
-
-    function hookControls(){
+      await render();
+      subscribeRealtime();
       btnDay.onclick   = () => setView('Day');
       btnWeek.onclick  = () => setView('Week');
       btnMonth.onclick = () => setView('Month');
       refreshBtn.onclick = () => render();
       monthSelect.onchange = () => { state.monthKey = monthSelect.value; render(); };
+      // resize handling so canvas always fills page
+      window.addEventListener('resize', () => {
+        // slight delay to let layout settle
+        setTimeout(() => enhanceBarHover(lastTasksCache), 80);
+      });
     }
 
     function setView(v){ state.view = v; if(gantt) gantt.change_view_mode(v); }
@@ -163,8 +143,8 @@
       const base = new Date(); base.setDate(1);
       for(let offset=-2; offset<=9; offset++){
         const d = new Date(base); d.setMonth(d.getMonth()+offset);
-        const key = keyFromDate(d);
         const opt = document.createElement('option');
+        const key = keyFromDate(d);
         opt.value = key;
         opt.textContent = d.toLocaleString(undefined, { month:'long', year:'numeric' });
         if(key === state.monthKey) opt.selected = true;
@@ -173,7 +153,6 @@
     }
 
     function keyFromDate(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; }
-
     function monthRangeFromKey(key){
       const [y,m] = key.split('-').map(Number);
       const start = new Date(y, m-1, 1);
@@ -186,61 +165,44 @@
       if(error){ console.error(error); return []; }
       const { start, end } = monthRangeFromKey(state.monthKey);
       return (data || []).filter(t => {
-        const s = new Date(t.start_date);
-        const e = new Date(t.end_date || t.start_date);
-        return e >= start && s <= end; // overlaps month
+        const s = new Date(t.start_date); const e = new Date(t.end_date || t.start_date);
+        return e >= start && s <= end;
       });
     }
 
+    let lastTasksCache = [];
     async function render(){
-      // show skeleton while loading
-      skeleton.style.display = 'block';
-      ganttEl.style.display = 'none';
-
       const rows = await fetchTasks();
       const tasks = rows.map(r => ({
         id: r.id,
         name: r.title,
-        start: formatDate(r.start_date),
-        end: formatDate(r.end_date || r.start_date),
+        start: fmt(r.start_date),
+        end: fmt(r.end_date || r.start_date),
         progress: Number(r.progress || 0),
         dependencies: (r.dependencies || '').trim(),
         custom_class: statusClass(Number(r.progress || 0)),
         notes: (r.notes ?? r.description ?? '').trim()
       }));
+      lastTasksCache = tasks;
 
-      // draw
       ganttEl.innerHTML = '';
       gantt = new Gantt('#gantt', tasks, {
         view_mode: state.view,
         date_format: 'YYYY-MM-DD',
         language: 'en',
-        custom_popup_html: task => {
-          return `
-            <div class="details-card">
-              <div style="font-weight:700">${escapeHtml(task.name)}</div>
-              <div style="color:#64748b;font-size:12px">${task._start.format('ll')} → ${task._end.format('ll')} · ${task.progress}%</div>
-              <div style="margin-top:6px;font-size:12px;color:#0f172a">${escapeHtml(task.notes || 'No description')}</div>
-            </div>`;
-        }
+        custom_popup_html: task => `
+          <div style="background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 12px;max-width:260px;box-shadow:0 8px 20px rgba(2,6,23,.08)">
+            <div style="font-weight:700">${escapeHtml(task.name)}</div>
+            <div style="color:#64748b;font-size:12px;margin-top:2px">${task._start.format('ll')} → ${task._end.format('ll')} · ${task.progress}%</div>
+            <div style="margin-top:6px;font-size:12px;color:#0f172a">${escapeHtml(task.notes || 'No description')}</div>
+          </div>`
       });
 
-      // style tweaks for light theme + progress colors
-      paintBars();
-
-      // hover works anywhere on the bar & shows tooltip + popup
+      applyBarColors();
       enhanceBarHover(tasks);
-
-      // reveal chart
-      skeleton.style.display = 'none';
-      ganttEl.style.display = 'block';
     }
 
-    function statusClass(p){
-      if (p >= 100) return 'is-done';
-      if (p > 0) return 'is-doing';
-      return 'is-todo';
-    }
+    function statusClass(p){ if(p>=100) return 'is-done'; if(p>0) return 'is-doing'; return 'is-todo'; }
 
     function subscribeRealtime(){
       supabase.channel('public:tasks')
@@ -248,83 +210,58 @@
         .subscribe();
     }
 
-    // make bars match our legend & animate nicely
-    function paintBars(){
+    function applyBarColors(){
       document.querySelectorAll('.gantt .bar-wrapper').forEach(wrap => {
         const bar = wrap.querySelector('rect.bar');
         const prog = wrap.querySelector('rect.bar-progress');
         if(!bar) return;
-        // default bar color
         bar.setAttribute('fill', getComputedStyle(document.documentElement).getPropertyValue('--bar').trim());
         if(prog){
-          // if 100% -> green, else near-black overlay
-          const width = parseFloat(prog.getAttribute('width')||'0');
-          const full  = parseFloat(bar.getAttribute('width')||'0');
-          const done = full>0 && Math.abs(width-full) < 0.5;
-          prog.setAttribute('fill', done ? getComputedStyle(document.documentElement).getPropertyValue('--done').trim()
-                                         : getComputedStyle(document.documentElement).getPropertyValue('--progress').trim());
-          prog.style.transition = 'width .6s cubic-bezier(.22,.61,.36,1)';
+          const w = parseFloat(prog.getAttribute('width')||'0');
+          const full = parseFloat(bar.getAttribute('width')||'0');
+          const done = full>0 && Math.abs(w-full) < 0.5;
+          prog.setAttribute('fill', done
+            ? getComputedStyle(document.documentElement).getPropertyValue('--done').trim()
+            : getComputedStyle(document.documentElement).getPropertyValue('--progress').trim());
         }
       });
     }
 
-    // Hover anywhere on bar → tooltip + popup
+    // hover anywhere on the bar → tooltip + popup
     function enhanceBarHover(tasks){
       const map = Object.fromEntries(tasks.map(t => [String(t.id), t]));
       document.querySelectorAll('.gantt .bar-wrapper').forEach(wrap => {
         const id = wrap.getAttribute('data-id');
         const bar = wrap.querySelector('rect.bar');
-        const prog = wrap.querySelector('rect.bar-progress');
+        if(!bar) return;
 
-        // add / update hit overlay
         let hit = wrap.querySelector('rect.hover-hit');
         if(!hit){
           hit = document.createElementNS('http://www.w3.org/2000/svg','rect');
           hit.setAttribute('class','hover-hit');
           wrap.appendChild(hit);
         }
-        // copy geometry from main bar
         ['x','y','width','height','rx','ry'].forEach(attr=>{
-          const v = bar.getAttribute(attr);
-          if(v!=null) hit.setAttribute(attr, v);
+          const v = bar.getAttribute(attr); if(v!=null) hit.setAttribute(attr, v);
         });
 
-        // tooltip text (title + notes)
-        const t = map[id];
-        const tip = t ? `${t.name}${t.notes ? ' — ' + t.notes : ''}` : '';
+        const t = map[id]; const tip = t ? `${t.name}${t.notes ? ' — ' + t.notes : ''}` : '';
         let old = hit.querySelector('title'); if(old) old.remove();
         const title = document.createElementNS('http://www.w3.org/2000/svg','title');
-        title.textContent = tip;
-        hit.appendChild(title);
+        title.textContent = tip; hit.appendChild(title);
 
-        // open popup on hover, close on leave
-        hit.addEventListener('mouseenter', () => {
+        hit.onmouseenter = () => {
           if(gantt && typeof gantt.show_popup === 'function') gantt.show_popup(t);
           else wrap.dispatchEvent(new MouseEvent('click', { bubbles:true }));
-        });
-        hit.addEventListener('mouseleave', () => {
-          if(gantt && typeof gantt.hide_popup === 'function') gantt.hide_popup();
-        });
+        };
+        hit.onmouseleave = () => { if(gantt && typeof gantt.hide_popup === 'function') gantt.hide_popup(); };
       });
     }
 
     // utils
-    function formatDate(d){
-      const x = new Date(d);
-      const yyyy = x.getFullYear();
-      const mm = String(x.getMonth()+1).padStart(2,'0');
-      const dd = String(x.getDate()).padStart(2,'0');
-      return `${yyyy}-${mm}-${dd}`;
-    }
+    function fmt(d){ const x=new Date(d), y=x.getFullYear(), m=String(x.getMonth()+1).padStart(2,'0'), dd=String(x.getDate()).padStart(2,'0'); return `${y}-${m}-${dd}`; }
     function debounce(fn, wait){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn.apply(this,a), wait); }; }
     function escapeHtml(s){ return String(s).replace(/[&<>\"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#039;'}[c])); }
   </script>
-
-  <style>
-    /* status classes -> match legend semantics */
-    .gantt .bar.is-todo{opacity:.85}
-    .gantt .bar.is-doing{opacity:.95}
-    .gantt .bar.is-done{opacity:1; filter:saturate(1.1)}
-  </style>
 </body>
 </html>
