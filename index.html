@@ -13,10 +13,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <style>
-    :root {
-      --bg: #0b0c10; --card: #111318; --muted: #9aa4b2; --text: #e8eef7;
-      --accent: #4f46e5; --ok: #22c55e; --warn: #f59e0b;
-    }
+    :root { --bg:#0b0c10; --card:#111318; --muted:#9aa4b2; --text:#e8eef7; --accent:#4f46e5; --ok:#22c55e; --warn:#f59e0b; }
     html,body{height:100%}
     body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial,"Noto Sans"}
     .wrap{max-width:1100px;margin:24px auto;padding:0 16px}
@@ -70,14 +67,14 @@
   </div>
 
   <script>
-    // 1) Supabase credentials — URL must start with https://
-    const SUPABASE_URL = "https://wjfgntocqjtwaqam1bgc.supabase.co";
+    // Supabase credentials
+    const SUPABASE_URL = "https://wjfgntocqjtwaqamlbgc.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndqZmdudG9jcWp0d2FxYW1sYmdjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUzNjQzODIsImV4cCI6MjA3MDk0MDM4Mn0.IRwC5-0cv2rkaZbzR1Ovxnt6dl0m1IwJgcLl2I67YzQ";
 
-    // 2) Connect Supabase
+    // Connect Supabase
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // 3) Page state
+    // State & elements
     const state = { view: 'Week', monthKey: keyFromDate(new Date()) };
     const monthSelect = document.getElementById('monthSelect');
     const btnDay = document.getElementById('viewDay');
@@ -88,7 +85,6 @@
     const errEl = document.getElementById('err');
     let gantt;
 
-    // 4) Init
     init();
 
     async function init(){
@@ -105,10 +101,8 @@
       refreshBtn.onclick = () => render();
       monthSelect.onchange = () => { state.monthKey = monthSelect.value; render(); };
     }
-
     function setView(v){ state.view = v; if(gantt) gantt.change_view_mode(v); }
 
-    // 5) Month picker
     function buildMonthPicker(){
       monthSelect.innerHTML = '';
       const base = new Date(); base.setDate(1);
@@ -130,7 +124,6 @@
       return { start, end };
     }
 
-    // 6) Data
     async function fetchTasks(){
       try {
         const { data, error } = await supabase
@@ -138,7 +131,6 @@
           .select('*')
           .order('start_date', { ascending: true });
         if (error) throw error;
-
         const { start, end } = monthRangeFromKey(state.monthKey);
         return (data || []).filter(t => {
           const s = new Date(t.start_date);
@@ -146,17 +138,12 @@
           return e >= start && s <= end;
         });
       } catch (e) {
-        showErr(
-          `Failed to fetch from Supabase.\n` +
-          `• Message: ${e.message || String(e)}\n` +
-          `• Check URL, anon key, API > Exposed schemas includes 'public', and Auth > URL Configuration has your GitHub Pages origin.`
-        );
+        showErr(`Failed to fetch from Supabase.\n• Message: ${e.message || String(e)}\n• Check URL, anon key, Exposed schemas has 'public', and Auth > URL Configuration includes https://oppzeronemo-lgtm.github.io`);
         console.error(e);
         return [];
       }
     }
 
-    // 7) Render Gantt
     async function render(){
       const rows = await fetchTasks();
       const tasks = rows.map(r => ({
@@ -168,9 +155,7 @@
         dependencies: (r.dependencies || '').trim(),
         custom_class: progressClass(Number(r.progress || 0))
       }));
-
       ganttEl.innerHTML = '';
-      // Gantt constructor is provided by frappe-gantt UMD build
       gantt = new Gantt('#gantt', tasks, {
         view_mode: state.view,
         date_format: 'YYYY-MM-DD',
@@ -183,12 +168,9 @@
       });
     }
 
-    // 8) Realtime refresh
     function subscribeRealtime(){
       supabase.channel('public:tasks')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, debounce(async () => {
-          await render();
-        }, 400))
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, debounce(async () => { await render(); }, 400))
         .subscribe();
     }
 
@@ -201,9 +183,7 @@
   </script>
 
   <style>
-    .gantt .bar.is-done { opacity: .8; }
-    .gantt .bar.is-doing { filter: saturate(1.2); }
-    .gantt .bar.is-todo { opacity: .9; }
+    .gantt .bar.is-done { opacity: .8; } .gantt .bar.is-doing { filter: saturate(1.2); } .gantt .bar.is-todo { opacity: .9; }
   </style>
 </body>
 </html>
