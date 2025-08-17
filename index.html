@@ -10,10 +10,10 @@
 
 <style>
   :root{
-    --pending:#FFD8A8;   /* 0% */
-    --doing:#EDE8D0;     /* 1–99% base (ash/beige) */
-    --done:#008000;      /* 100% overlay (green) */
-    --done-base:#E8F5EA; /* 100% base (pale green) */
+    --pending:#FFD8A8;   /* Pending (0%) */
+    --doing:#EDE8D0;     /* In progress base (ash/beige) */
+    --done:#008000;      /* Completed overlay */
+    --done-base:#E8F5EA; /* Completed base */
     --ink:#202124; --muted:#6b7280; --border:#e5e7eb; --card:#fafafa;
     --danger:#b42318; --danger-bg:#fee4e2;
   }
@@ -22,57 +22,59 @@
   body{margin:0;background:#fff;color:var(--ink);font:15px/1.5 Inter,system-ui,Segoe UI,Roboto,Arial}
 
   .wrap{height:100%;display:flex;flex-direction:column;gap:12px;padding:16px;box-sizing:border-box}
-  .top{display:flex;justify-content:space-between;align-items:center}
+  .top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
   .brand{font-weight:700;font-size:18px}
-  .controls>*{margin-left:8px}
+  .controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .controls .field{display:flex;align-items:center;gap:6px}
+  .controls input[type="month"], .controls input[type="date"], .controls select{
+    padding:8px 10px;border:1px solid var(--border);border-radius:10px;background:#fff
+  }
+  .controls button{padding:8px 12px;border:1px solid var(--border);background:#fff;border-radius:10px;cursor:pointer}
+  .controls button.active{background:#111;color:#fff;border-color:#111}
+  .range-title{color:#111;font-weight:700;min-width:220px}
 
   .card{flex:1;display:flex;flex-direction:column;min-height:0;background:var(--card);
         border:1px solid var(--border);border-radius:14px;padding:12px}
 
-  /* Header (days) + rows share same grid columns so everything aligns */
-  .timeline{display:grid;grid-template-rows:auto 1fr;gap:8px;flex:1;min-height:520px}
-  .days{display:grid;gap:2px}
-  .day-cell{text-align:center;font-size:11px;color:#6b7280;padding:4px 0;border-radius:6px;background:#fff;border:1px solid var(--border)}
+  /* Timeline layout */
+  .timeline{display:grid;grid-template-rows:auto 1fr;gap:8px;flex:1;min-height:540px}
+
+  .head{display:grid;gap:2px}
+  .head-cell{background:#fff;border:1px solid var(--border);border-radius:8px;
+             font-size:11px;color:#6b7280;text-align:center;padding:4px 0}
+  .head-cell.big{font-weight:700;color:#111}
+
   .grid{display:grid;gap:10px;align-content:start}
-
-  .row{display:contents} /* each task renders its own grid children */
-
   .task-label{align-self:center;font-size:13px;font-weight:600;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:8px}
-  .task-bar-wrap{position:relative;height:40px;display:flex;align-items:center}
+  .task-bar-wrap{position:relative;height:46px;display:flex;align-items:center}
 
   .bar{
-    position:relative;height:32px;border-radius:8px;
-    background:var(--doing); /* default base */
-    border:1px solid rgba(0,0,0,.05); box-shadow:0 2px 8px rgba(0,0,0,.04);
-    overflow:hidden;
+    position:absolute;height:34px;border-radius:10px;
+    background:var(--doing); /* default */
+    border:1px solid rgba(0,0,0,.06); box-shadow:0 2px 10px rgba(0,0,0,.05);
+    overflow:hidden; left:0; width:0;
   }
   .bar.pending{background:var(--pending)}
   .bar.done{background:var(--done-base)}
   .bar .prog{
-    position:absolute;left:0;top:0;height:100%;width:0;border-radius:8px 0 0 8px;
+    position:absolute;left:0;top:0;height:100%;width:0;border-radius:10px 0 0 10px;
     background:transparent; /* set in JS */
   }
 
-  /* Legend */
   .legend{display:flex;gap:18px;align-items:center;color:var(--muted);font-size:13px;margin-top:12px}
   .sw{width:12px;height:12px;border-radius:3px;margin-right:6px;display:inline-block;border:1px solid #d1d5db}
   .sw.pending{background:var(--pending)}
   .sw.doing{background:var(--doing)}
   .sw.done{background:var(--done)}
 
-  /* Tooltip */
   .tip{position:fixed;transform:translate(-50%,-110%);background:#fff;border:1px solid var(--border);padding:8px 10px;border-radius:10px;
-       box-shadow:0 10px 24px rgba(0,0,0,.10);font-size:13px;display:none;pointer-events:none;z-index:1000;max-width:320px}
+       box-shadow:0 10px 24px rgba(0,0,0,.10);font-size:13px;display:none;pointer-events:none;z-index:1000;max-width:340px}
 
-  /* Status banners */
   .banner{border:1px solid var(--border);background:#fff;border-radius:10px;padding:14px;margin:10px 0;color:#111}
   .banner.error{border-color:var(--danger); background:var(--danger-bg); color:var(--danger)}
   .spinner{display:flex;align-items:center;gap:10px;color:var(--muted);padding:10px}
   .spinner:before{content:'';width:16px;height:16px;border-radius:50%;border:3px solid #ddd;border-top-color:#999;display:inline-block;animation:spin 1s linear infinite}
   @keyframes spin{to{transform:rotate(360deg)}}
-
-  /* Layout grid columns (label + day columns) are set from JS via grid-template-columns */
-  .days, .grid{grid-auto-rows:minmax(40px,auto)}
 </style>
 </head>
 <body>
@@ -80,10 +82,29 @@
     <div class="top">
       <div class="brand">UDP Programme Comms Dashboard</div>
       <div class="controls">
-        <select id="monthSelect" title="Pick month"></select>
-        <button id="viewDay">Day</button>
-        <button id="viewWeek">Week</button>
+        <span class="range-title" id="rangeTitle">—</span>
+
+        <div class="field">
+          <label for="monthInput">Month</label>
+          <input id="monthInput" type="month" />
+        </div>
+
+        <div class="field" id="weekField" style="display:none">
+          <label for="weekSelect">Week</label>
+          <select id="weekSelect"></select>
+        </div>
+
+        <div class="field" id="dayField" style="display:none">
+          <label for="dayInput">Day</label>
+          <input id="dayInput" type="date" />
+        </div>
+
         <button id="viewMonth">Month</button>
+        <button id="viewWeek">Week</button>
+        <button id="viewDay">Day</button>
+        <button id="prevBtn">◀</button>
+        <button id="nextBtn">▶</button>
+        <button id="todayBtn">Today</button>
         <button id="refreshBtn">Refresh</button>
       </div>
     </div>
@@ -92,7 +113,7 @@
       <div id="statusArea" class="spinner">Loading tasks…</div>
 
       <div class="timeline" id="timeline" style="display:none">
-        <div class="days" id="days"></div>
+        <div class="head" id="head"></div>
         <div class="grid" id="grid"></div>
       </div>
 
@@ -114,97 +135,174 @@
   const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
   // ── State ───────────────────────────────────────────────────────────────────
-  const state = { view:'Month', monthKey:keyFromDate(new Date()) };
-  let allRows = [], tasks = [], daysInMonth = 30, monthStart, monthEnd;
+  const state = {
+    view:'Month',              // 'Month' | 'Week' | 'Day'
+    monthKey: keyFromDate(new Date()),
+    weekIndex: 0,              // 0-based within chosen month
+    dayDate: new Date()        // date for Day view
+  };
+  let allRows = [], tasks = [];
+  let monthStart, monthEnd, daysInMonth, weeks=[];
 
   // ── Boot ────────────────────────────────────────────────────────────────────
   init();
   async function init(){
     bindControls();
+    initPickers();
+    markActiveView();
     showSpinner();
     await loadAllRows();
-    buildMonthPickerFromData();
-    await renderForMonth(state.monthKey);
+    await renderAll();
   }
 
-  // ── Controls ────────────────────────────────────────────────────────────────
+  // ── Controls / Pickers ──────────────────────────────────────────────────────
   function bindControls(){
-    monthSelect.addEventListener('change', async () => {
-      state.monthKey = monthSelect.value;
-      await renderForMonth(state.monthKey);
+    viewMonth.onclick = ()=>{ state.view='Month'; markActiveView(); renderAll(); };
+    viewWeek.onclick  = ()=>{ state.view='Week';  markActiveView(); renderAll(); };
+    viewDay.onclick   = ()=>{ state.view='Day';   markActiveView(); renderAll(); };
+    prevBtn.onclick   = ()=> nav(-1);
+    nextBtn.onclick   = ()=> nav(1);
+    todayBtn.onclick  = ()=> goToday();
+    refreshBtn.onclick= async ()=>{ showSpinner('Refreshing…'); await loadAllRows(); await renderAll(); };
+
+    monthInput.addEventListener('change', ()=>{
+      state.monthKey = monthInput.value;
+      // reset week/day inside that month
+      const [yy,mm] = state.monthKey.split('-').map(Number);
+      state.dayDate = new Date(yy, mm-1, 1);
+      state.weekIndex = 0;
+      renderAll();
     });
-    viewDay.onclick   = ()=>{ state.view='Day';   renderForMonth(state.monthKey); };
-    viewWeek.onclick  = ()=>{ state.view='Week';  renderForMonth(state.monthKey); };
-    viewMonth.onclick = ()=>{ state.view='Month'; renderForMonth(state.monthKey); };
-    refreshBtn.onclick= async ()=>{ showSpinner('Refreshing…'); await loadAllRows(); buildMonthPickerFromData(); await renderForMonth(state.monthKey); };
+    weekSelect.addEventListener('change', ()=>{
+      state.weekIndex = Number(weekSelect.value)||0;
+      state.view = 'Week';
+      markActiveView();
+      renderAll();
+    });
+    dayInput.addEventListener('change', ()=>{
+      const d = new Date(dayInput.value);
+      if(!isNaN(d)) { state.dayDate = d; state.view='Day'; markActiveView(); renderAll(); }
+    });
   }
 
-  // ── UI helpers ──────────────────────────────────────────────────────────────
-  function showSpinner(msg='Loading tasks…'){
-    const s = document.getElementById('statusArea');
-    s.className = 'spinner'; s.textContent = msg;
+  function initPickers(){
+    // Month picker default = current state
+    monthInput.value = state.monthKey;
+    // Day picker default = today
+    dayInput.value = toInputDate(state.dayDate);
   }
-  function showError(message, hint=''){
-    const el = document.getElementById('statusArea');
-    el.className = 'banner error';
-    el.innerHTML = `<strong>Error:</strong> ${escapeHtml(message)}${hint?`<br><small>${escapeHtml(hint)}</small>`:''}`;
-    document.getElementById('timeline').style.display = 'none';
+
+  function markActiveView(){
+    [viewMonth, viewWeek, viewDay].forEach(b=>b.classList.remove('active'));
+    if(state.view==='Month') viewMonth.classList.add('active');
+    if(state.view==='Week')  viewWeek.classList.add('active');
+    if(state.view==='Day')   viewDay.classList.add('active');
+
+    // show/hide contextual pickers
+    weekField.style.display = (state.view==='Week') ? 'flex' : 'none';
+    dayField.style.display  = (state.view==='Day')  ? 'flex' : 'none';
   }
-  function clearStatus(){ const el=document.getElementById('statusArea'); el.className=''; el.innerHTML=''; }
+
+  function nav(dir){
+    if(state.view==='Month'){
+      shiftMonth(dir);
+    } else if(state.view==='Week'){
+      clampWeekIndex();
+      state.weekIndex += dir;
+      if(state.weekIndex < 0){
+        shiftMonth(-1);
+        weeks = getWeeksInMonth(monthStart);
+        state.weekIndex = weeks.length - 1;
+      } else if(state.weekIndex >= weeks.length){
+        shiftMonth(1);
+        weeks = getWeeksInMonth(monthStart);
+        state.weekIndex = 0;
+      }
+    } else { // Day
+      state.dayDate = addDays(state.dayDate, dir);
+      if(state.dayDate < monthStart) shiftMonth(-1);
+      if(state.dayDate > monthEnd)   shiftMonth(1);
+      dayInput.value = toInputDate(state.dayDate);
+    }
+    renderAll();
+  }
+  function goToday(){
+    const now = new Date();
+    state.monthKey = keyFromDate(now);
+    state.dayDate = new Date(now);
+    state.weekIndex = 0;
+    monthInput.value = state.monthKey;
+    dayInput.value = toInputDate(state.dayDate);
+    renderAll();
+  }
+  function shiftMonth(delta){
+    const [y,m] = state.monthKey.split('-').map(Number);
+    const d = new Date(y, m-1 + delta, 1);
+    state.monthKey = keyFromDate(d);
+    monthInput.value = state.monthKey;
+    state.dayDate = new Date(d);
+    state.weekIndex = 0;
+  }
 
   // ── Data ────────────────────────────────────────────────────────────────────
   async function loadAllRows(){
     try{
-      const { data, error } = await supabase.from('tasks').select('*').order('start_date',{ascending:true});
+      const { data, error } = await supabase
+        .from('tasks')
+        .select('*')
+        .order('start_date',{ascending:true});
       if(error){ console.error(error); showError(error.message, 'Check URL, anon key, RLS policy, and table/columns.'); allRows=[]; return; }
       allRows = data || [];
-      if(!allRows.length){ showError('No rows found in table "tasks".', 'Add some rows or pick another month.'); }
+      if(!allRows.length){ showError('No rows found in table "tasks".', 'Add some rows to table "tasks".'); }
       else { clearStatus(); }
     }catch(e){ console.error(e); showError(String(e)); allRows=[]; }
   }
 
-  function buildMonthPickerFromData(){
-    const months = new Set();
-    for(const r of allRows){
-      // include both start and end months to capture spanning tasks
-      months.add(keyFromDate(new Date(r.start_date)));
-      if(r.end_date) months.add(keyFromDate(new Date(r.end_date)));
-    }
-    const list = months.size ? Array.from(months).sort() : [state.monthKey];
-    monthSelect.innerHTML='';
-    for(const key of list){
-      const [y,m]=key.split('-').map(Number);
-      const d = new Date(y, m-1, 1);
-      const opt = document.createElement('option');
-      opt.value = key; opt.textContent = d.toLocaleString(undefined,{month:'long',year:'numeric'});
-      monthSelect.appendChild(opt);
-    }
-    if(months.size && !months.has(state.monthKey)){
-      state.monthKey = list[list.length-1];
-    }
-    monthSelect.value = state.monthKey;
+  // ── Render orchestration ────────────────────────────────────────────────────
+  async function renderAll(){
+    setupMonthBounds();
+    buildWeeksDropdown();
+
+    const range = (state.view==='Day')  ? dayBounds(state.dayDate)
+                 : (state.view==='Week') ? weeks[state.weekIndex]
+                 : {start:monthStart, end:monthEnd};
+
+    tasks = filterTasksForRange(range);
+    buildHead(range);
+    buildGrid(range);
+
+    document.getElementById('timeline').style.display='grid';
+    updateRangeTitle(range);
   }
 
-  async function renderForMonth(monthKey){
-    const [y,m]=monthKey.split('-').map(Number);
+  function setupMonthBounds(){
+    const [y,m] = state.monthKey.split('-').map(Number);
     monthStart = new Date(y, m-1, 1);
     monthEnd   = new Date(y, m, 0, 23, 59, 59, 999);
     daysInMonth= monthEnd.getDate();
+    weeks = getWeeksInMonth(monthStart);
+    clampWeekIndex();
+    // keep day inside visible month
+    if(state.dayDate < monthStart) state.dayDate = new Date(monthStart);
+    if(state.dayDate > monthEnd)   state.dayDate = new Date(monthEnd);
+  }
 
-    // Filter tasks intersecting this month
-    const rows = allRows.filter(t => new Date(t.end_date||t.start_date) >= monthStart &&
-                                     new Date(t.start_date) <= monthEnd);
+  function buildWeeksDropdown(){
+    weekSelect.innerHTML = '';
+    weeks.forEach((w, i)=>{
+      const opt = document.createElement('option');
+      opt.value = i;
+      opt.textContent = `Week ${i+1} (${fmtMMM(dStr(w.start))}–${fmtMMM(dStr(w.end))})`;
+      weekSelect.appendChild(opt);
+    });
+    weekSelect.value = state.weekIndex;
+  }
 
-    // Nothing to show
-    if(!rows.length){
-      document.getElementById('timeline').style.display='none';
-      document.getElementById('statusArea').className='banner';
-      document.getElementById('statusArea').textContent = 'No tasks in this month.';
-      return;
-    }
-
-    // Map to internal tasks
-    tasks = rows.map(r=>({
+  // ── Filtering & mapping ─────────────────────────────────────────────────────
+  function filterTasksForRange(range){
+    const rows = allRows.filter(t => new Date(t.end_date||t.start_date) >= range.start &&
+                                     new Date(t.start_date) <= range.end);
+    return rows.map(r=>({
       id:String(r.id),
       name:r.title,
       start:new Date(r.start_date),
@@ -212,73 +310,116 @@
       progress: clamp(Number(r.progress||0),0,100),
       notes:r.notes||''
     }));
-
-    // Build grids
-    buildGrids();
-    document.getElementById('timeline').style.display='grid';
-    clearStatus();
   }
 
-  // ── Build Header & Rows (pure CSS grid, no external lib) ────────────────────
-  function buildGrids(){
-    const daysEl = document.getElementById('days');
-    const gridEl = document.getElementById('grid');
-    daysEl.innerHTML = ''; gridEl.innerHTML = '';
+  // ── Header builders ─────────────────────────────────────────────────────────
+  function buildHead(range){
+    const head = document.getElementById('head');
+    head.innerHTML = '';
+    const labelCol = '260px';
 
-    // template: 240px label column + N day columns
-    const labelCol = '240px';
-    daysEl.style.gridTemplateColumns = `${labelCol} repeat(${daysInMonth}, 1fr)`;
-    gridEl.style.gridTemplateColumns = `${labelCol} repeat(${daysInMonth}, 1fr)`;
+    if(state.view==='Month'){
+      head.style.gridTemplateColumns = `${labelCol} repeat(${daysInMonth}, 1fr)`;
+      const big = document.createElement('div');
+      big.className = 'head-cell big';
+      big.style.textAlign='left';
+      big.textContent = monthStart.toLocaleString(undefined,{month:'long',year:'numeric'});
+      head.appendChild(big);
+      for(let d=1; d<=daysInMonth; d++){
+        const date = new Date(monthStart.getFullYear(), monthStart.getMonth(), d);
+        const cel = document.createElement('div');
+        cel.className='head-cell';
+        cel.textContent = `${date.toLocaleDateString(undefined,{weekday:'short'})} ${d}`;
+        head.appendChild(cel);
+      }
+    } else if(state.view==='Week'){
+      head.style.gridTemplateColumns = `${labelCol} repeat(7, 1fr)`;
+      const big = document.createElement('div');
+      big.className='head-cell big';
+      big.style.textAlign='left';
+      big.textContent = `Week ${state.weekIndex+1} • ${fmtMMM(dStr(range.start))} – ${fmtMMM(dStr(range.end))}`;
+      head.appendChild(big);
+      for(let i=0;i<7;i++){
+        const date = addDays(range.start, i);
+        const cel = document.createElement('div');
+        cel.className='head-cell';
+        cel.textContent = `${date.toLocaleDateString(undefined,{weekday:'short'})} ${date.getDate()}`;
+        head.appendChild(cel);
+      }
+    } else {
+      head.style.gridTemplateColumns = `${labelCol} repeat(24, 1fr)`;
+      const big = document.createElement('div');
+      big.className='head-cell big';
+      big.style.textAlign='left';
+      big.textContent = state.dayDate.toLocaleDateString(undefined,{weekday:'long', month:'long', day:'numeric', year:'numeric'});
+      head.appendChild(big);
+      for(let h=0; h<24; h++){
+        const cel = document.createElement('div');
+        cel.className='head-cell';
+        cel.textContent = `${String(h).padStart(2,'0')}:00`;
+        head.appendChild(cel);
+      }
+    }
+  }
 
-    // header row
-    const lab = document.createElement('div');
-    lab.className = 'day-cell';
-    lab.style.background='transparent';
-    lab.style.border='none';
-    lab.style.textAlign='left';
-    lab.style.fontWeight='600';
-    lab.textContent = 'Tasks';
-    daysEl.appendChild(lab);
-
-    for(let d=1; d<=daysInMonth; d++){
-      const cel = document.createElement('div');
-      cel.className='day-cell';
-      cel.textContent = d;
-      daysEl.appendChild(cel);
+  // ── Grid / Bars ─────────────────────────────────────────────────────────────
+  function buildGrid(range){
+    const grid = document.getElementById('grid');
+    grid.innerHTML = '';
+    const labelCol = '260px';
+    if(state.view==='Month'){
+      grid.style.gridTemplateColumns = `${labelCol} repeat(${daysInMonth}, 1fr)`;
+    } else if(state.view==='Week'){
+      grid.style.gridTemplateColumns = `${labelCol} repeat(7, 1fr)`;
+    } else {
+      grid.style.gridTemplateColumns = `${labelCol} repeat(24, 1fr)`;
     }
 
-    // each task row = label + bar
+    // rows
     for(const t of tasks){
-      // label
       const label = document.createElement('div');
       label.className = 'task-label';
       label.textContent = t.name;
-      gridEl.appendChild(label);
+      grid.appendChild(label);
 
-      // bar cell (spans across day columns)
       const wrap = document.createElement('div');
       wrap.className = 'task-bar-wrap';
-      wrap.style.gridColumn = `${1+1} / span ${daysInMonth}`; // place in the timeline columns area
-      // inner bar placed with absolute left/right using CSS grid columns computation
-      const bar = document.createElement('div');
+      wrap.style.gridColumn = `2 / -1`; // span all timeline columns
+
+      // intersection with the visible range
+      const a = maxDate(range.start, t.start);
+      const b = minDate(range.end,   t.end);
+      if(b < a){ grid.appendChild(wrap); continue; }
+
+      const totalUnits = (state.view==='Day') ? 24 : (state.view==='Week') ? 7 : daysInMonth;
+
+      let leftPct = 0, widthPct = 0;
+
+      if(state.view==='Day'){
+        // hours within the day (inclusive)
+        const sHour = isSameDay(a, state.dayDate) ? a.getHours() : 0;
+        const eHour = isSameDay(b, state.dayDate) ? b.getHours() : 23;
+        leftPct  = (sHour / 24) * 100;
+        widthPct = ((eHour - sHour + 1) / 24) * 100;
+      } else {
+        const unitStart = diffDays(range.start, a);
+        const unitEnd   = diffDays(range.start, b);
+        const spanUnits = Math.max(1, unitEnd - unitStart + 1);
+        leftPct  = (unitStart / totalUnits) * 100;
+        widthPct = (spanUnits / totalUnits) * 100;
+      }
+
+      // ensure visible even for 1 unit
+      widthPct = Math.max(widthPct, (1/totalUnits)*100);
+
+      const bar  = document.createElement('div');
       bar.className = 'bar';
-
-      // compute start/end indices within month (clamped)
-      const si = Math.max(0, diffDays(monthStart, t.start));
-      const ei = Math.min(daysInMonth-1, diffDays(monthStart, t.end));
-      // compute left and width percentage relative to the whole month grid
-      const leftPct = (si / daysInMonth) * 100;
-      const spanDays = Math.max(1, ei - si + 1);
-      const widthPct = (spanDays / daysInMonth) * 100;
-
-      bar.style.position='absolute';
       bar.style.left = leftPct + '%';
       bar.style.width = widthPct + '%';
 
-      // base color by status
       if(t.progress === 0){ bar.classList.add('pending'); }
       else if(t.progress >= 100){ bar.classList.add('done'); }
-      // progress overlay
+
       const prog = document.createElement('div');
       prog.className = 'prog';
       if(t.progress === 0){
@@ -288,25 +429,78 @@
         prog.style.background = 'var(--done)';
       } else {
         prog.style.width = `${t.progress}%`;
-        prog.style.background = beigeRamp(t.progress); // warm beige ramp
+        prog.style.background = beigeRamp(t.progress);
       }
 
       // tooltip
       bar.addEventListener('mouseenter', e => showTip(e, t));
       bar.addEventListener('mousemove',  e => moveTip(e));
       bar.addEventListener('mouseleave', () => hideTip());
-      bar.addEventListener('click',      e => { // tap-friendly
-        const tip = document.getElementById('tip');
-        if(tip.style.display==='block'){ hideTip(); } else { showTip(e, t); }
-      });
+      bar.addEventListener('click',      e => { const tip=document.getElementById('tip'); if(tip.style.display==='block'){hideTip();} else {showTip(e,t);} });
 
       bar.appendChild(prog);
       wrap.appendChild(bar);
-      gridEl.appendChild(wrap);
+      grid.appendChild(wrap);
     }
   }
 
-  // ── Tooltip helpers ─────────────────────────────────────────────────────────
+  // ── Range title ─────────────────────────────────────────────────────────────
+  function updateRangeTitle(range){
+    const el = document.getElementById('rangeTitle');
+    if(state.view==='Month'){
+      el.textContent = monthStart.toLocaleString(undefined,{month:'long',year:'numeric'});
+    } else if(state.view==='Week'){
+      el.textContent = `${monthStart.toLocaleString(undefined,{month:'long',year:'numeric'})} — Week ${state.weekIndex+1} (${fmtMMM(dStr(range.start))}–${fmtMMM(dStr(range.end))})`;
+    } else {
+      el.textContent = state.dayDate.toLocaleDateString(undefined,{month:'short', day:'numeric', year:'numeric'});
+    }
+  }
+
+  // ── Helpers ─────────────────────────────────────────────────────────────────
+  function keyFromDate(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; }
+  function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
+  function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
+  function maxDate(a,b){ return (a>b)?a:b; } function minDate(a,b){ return (a<b)?a:b; }
+  function stripTime(d){ return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
+  function diffDays(a,b){ return Math.floor((stripTime(b) - stripTime(a)) / 86400000); }
+  function dStr(d){ return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
+  function fmtMMM(d){ return d.toLocaleDateString(undefined,{month:'short', day:'numeric'}); }
+  function isSameDay(a,b){ return a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate(); }
+  function dayBounds(d){ const s = new Date(d.getFullYear(), d.getMonth(), d.getDate()); const e = new Date(s); e.setHours(23,59,59,999); return {start:s, end:e}; }
+  function toInputDate(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+
+  // Weeks start on Monday and cover the whole month.
+  function getWeeksInMonth(firstOfMonth){
+    const out = [];
+    const year = firstOfMonth.getFullYear();
+    const month= firstOfMonth.getMonth();
+    let cursor = new Date(year, month, 1);
+    const dow = (cursor.getDay()+6)%7; // Sun=0 -> 6; Mon=1 -> 0
+    cursor.setDate(cursor.getDate() - dow); // back to Monday
+
+    const monthEnd = new Date(year, month+1, 0, 23, 59, 59, 999);
+    while(cursor <= monthEnd || out.length===0){
+      const start = new Date(cursor);
+      const end   = new Date(cursor); end.setDate(end.getDate()+6);
+      const range = {
+        start: new Date(Math.max(start, new Date(year,month,1))),
+        end:   new Date(Math.min(end,   monthEnd))
+      };
+      out.push(range);
+      cursor.setDate(cursor.getDate()+7);
+      if(out.length>6) break; // safety
+    }
+    return out;
+  }
+
+  // Progressive warm beige ramp (1–99%)
+  function beigeRamp(p){
+    const h=38, s=70, lStart=90, lEnd=55;
+    const l = lStart + (lEnd - lStart) * (p/100);
+    return `hsl(${h}, ${s}%, ${l}%)`;
+  }
+
+  // Tooltip
   function showTip(e,t){
     const tip = document.getElementById('tip');
     tip.innerHTML = `<strong>${escapeHtml(t.name)}</strong><br>${fmtYMD(t.start)} → ${fmtYMD(t.end)}<br>${t.progress}%${t.notes?`<br>${escapeHtml(t.notes)}`:''}`;
@@ -319,21 +513,21 @@
     tip.style.top  = (e.clientY - 10) + 'px';
   }
   function hideTip(){ document.getElementById('tip').style.display='none'; }
-
-  // ── Utils ───────────────────────────────────────────────────────────────────
-  function keyFromDate(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; }
-  function diffDays(a,b){ return Math.floor((stripTime(b) - stripTime(a)) / 86400000); }
-  function stripTime(d){ return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
-  function fmtYMD(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
-  function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
   function escapeHtml(s){ return String(s).replace(/[&<>\"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c])); }
+  function fmtYMD(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
 
-  // Progressive warm beige ramp (1–99%)
-  function beigeRamp(p){
-    const h=38, s=70, lStart=90, lEnd=55;
-    const l = lStart + (lEnd - lStart) * (p/100);
-    return `hsl(${h}, ${s}%, ${l}%)`;
+  // ── Status helpers ──────────────────────────────────────────────────────────
+  function showSpinner(msg='Loading tasks…'){
+    const s = document.getElementById('statusArea');
+    s.className = 'spinner'; s.textContent = msg;
   }
+  function showError(message, hint=''){
+    const el = document.getElementById('statusArea');
+    el.className = 'banner error';
+    el.innerHTML = `<strong>Error:</strong> ${escapeHtml(message)}${hint?`<br><small>${escapeHtml(hint)}</small>`:''}`;
+    document.getElementById('timeline').style.display = 'none';
+  }
+  function clearStatus(){ const el=document.getElementById('statusArea'); el.className=''; el.innerHTML=''; }
 </script>
 </body>
 </html>
