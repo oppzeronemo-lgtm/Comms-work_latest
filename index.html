@@ -20,6 +20,7 @@
       --done:#008000;      /* 100% overlay */
       --done-base:#E8F5EA; /* 100% base */
       --ink:#202124; --muted:#6b7280; --border:#e5e7eb; --card:#fafafa;
+      --danger:#b42318; --danger-bg:#fee4e2;
     }
 
     html,body{height:100%}
@@ -32,6 +33,7 @@
 
     .card{flex:1;display:flex;flex-direction:column;min-height:0;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:12px}
     #gantt{flex:1;border:1px solid var(--border);border-radius:12px;background:#fff;min-height:480px;overflow:hidden}
+    #gantt svg{width:100% !important;height:auto;display:block}
 
     /* Legend */
     .legend{display:flex;gap:18px;align-items:center;color:var(--muted);font-size:13px;margin-top:8px}
@@ -45,12 +47,16 @@
     #gantt .bar-wrapper{ transform:translateY(10px) }
     .gantt .bar-label{ font-weight:700; fill:#111827; font-size:13.5px; stroke:none }
 
-    /* Make SVG fill container to avoid any inner slider */
-    #gantt svg{width:100% !important;height:auto;display:block}
-
     /* Tooltip */
     .tip{position:absolute;background:#fff;border:1px solid var(--border);padding:8px 10px;border-radius:10px;
          box-shadow:0 10px 24px rgba(0,0,0,.10);font-size:13px;display:none;pointer-events:none;z-index:1000}
+
+    /* Status banners */
+    .banner{border:1px solid var(--border);background:#fff;border-radius:10px;padding:14px;margin:10px;color:#111}
+    .banner.error{border-color:var(--danger); background:var(--danger-bg); color:var(--danger)}
+    .spinner{display:flex;align-items:center;gap:10px;color:var(--muted);padding:10px}
+    .spinner:before{content:'';width:16px;height:16px;border-radius:50%;border:3px solid #ddd;border-top-color:#999;display:inline-block;animation:spin 1s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
   </style>
 </head>
 <body>
@@ -58,7 +64,7 @@
     <div class="top">
       <div class="brand">UDP Programme Comms Dashboard</div>
       <div class="controls">
-        <select id="monthSelect"></select>
+        <select id="monthSelect" title="Pick month"></select>
         <button id="viewDay">Day</button>
         <button id="viewWeek">Week</button>
         <button id="viewMonth">Month</button>
@@ -67,7 +73,8 @@
     </div>
 
     <div class="card">
-      <div id="gantt"></div>
+      <div id="statusArea" class="spinner">Loading tasks…</div>
+      <div id="gantt" aria-live="polite"></div>
       <div class="legend">
         <span><span class="sw pending"></span>Pending (0%)</span>
         <span><span class="sw doing"></span>In progress</span>
@@ -79,84 +86,112 @@
   <div id="tip" class="tip"></div>
 
   <script>
-    // Supabase
+    // ── Supabase ────────────────────────────────────────────────────────────────
     const SUPABASE_URL = "https://wjfgntocqjtwaqamlbgc.supabase.co";
     const SUPABASE_ANON_KEY =
       "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndqZmdudG9jcWp0d2FxYW1sYmdjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUzNjQzODIsImV4cCI6MjA3MDk0MDM4Mn0.IRwC5-0cv2rkaZbzR1Ovxnt6dl0m1IwJgcLl2I67YzQ";
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+    // ── App state ───────────────────────────────────────────────────────────────
     const state = { view:'Week', monthKey:keyFromDate(new Date()) };
-    let gantt, tasksById = {};
+    let gantt, tasksById = {}, allRows = [];
 
+    // ── Boot ───────────────────────────────────────────────────────────────────
     init();
-
     async function init(){
-      buildMonthPicker();
       bindControls();
-      await render();
+      showSpinner();
+      await loadAllRows();       // load once; build month list from actual data
+      buildMonthPickerFromData();
+      await renderForMonth(state.monthKey);
 
-      // Re-apply colours if the lib re-renders
-      const obs = new MutationObserver(() => applyColors());
+      const obs = new MutationObserver(applyColors);
       obs.observe(document.getElementById('gantt'), { childList:true, subtree:true, attributes:true });
-      window.addEventListener('resize', () => { if(gantt) gantt.refresh(); fitAndRebuild(); });
+      window.addEventListener('resize', () => { if(gantt) gantt.refresh(); renderForMonth(state.monthKey); });
     }
 
+    // ── UI helpers ─────────────────────────────────────────────────────────────
+    function showSpinner(msg='Loading tasks…'){
+      const s = document.getElementById('statusArea');
+      s.className = 'spinner';
+      s.textContent = msg;
+    }
+    function showError(message, hint=''){
+      const el = document.getElementById('statusArea');
+      el.className = 'banner error';
+      el.innerHTML = `<strong>Error:</strong> ${escapeHtml(message)}${hint?`<br><small>${escapeHtml(hint)}</small>`:''}`;
+    }
+    function clearStatus(){ document.getElementById('statusArea').className=''; document.getElementById('statusArea').innerHTML=''; }
+
+    // ── Controls ───────────────────────────────────────────────────────────────
     function bindControls(){
-      monthSelect.onchange = () => { state.monthKey = monthSelect.value; fitAndRebuild(); };
+      monthSelect.onchange = () => { state.monthKey = monthSelect.value; renderForMonth(state.monthKey); };
       viewDay.onclick   = () => changeView('Day');
       viewWeek.onclick  = () => changeView('Week');
       viewMonth.onclick = () => changeView('Month');
-      refreshBtn.onclick= () => fitAndRebuild();
+      refreshBtn.onclick= async () => { showSpinner('Refreshing…'); await loadAllRows(); buildMonthPickerFromData(); await renderForMonth(state.monthKey); };
     }
-    function changeView(v){ state.view=v; fitAndRebuild(); }
+    function changeView(v){ state.view=v; if(gantt){ gantt.change_view_mode(v); applyColors(); } }
 
-    function buildMonthPicker(){
-      const base = new Date(); base.setDate(1); monthSelect.innerHTML='';
-      for(let o=-2;o<=9;o++){
-        const d = new Date(base); d.setMonth(d.getMonth()+o);
-        const key = keyFromDate(d);
-        const opt = document.createElement('option');
-        opt.value = key;
-        opt.textContent = d.toLocaleString(undefined,{month:'long',year:'numeric'});
-        if(key===state.monthKey) opt.selected = true;
-        monthSelect.appendChild(opt);
-      }
-    }
-
-    // Helpers
+    // ── Date utilities ─────────────────────────────────────────────────────────
     function keyFromDate(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; }
     function monthRangeFromKey(key){ const [y,m]=key.split('-').map(Number); return { start:new Date(y,m-1,1), end:new Date(y,m,0,23,59,59,999) }; }
     function toYMD(d){ const x=new Date(d); return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`; }
     function css(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
     function daysBetween(a,b){ return Math.max(1, Math.round((b - a) / 86400000)); }
 
-    async function fetchTasks(){
-      const { data, error } = await supabase.from('tasks')
-        .select('*')
-        .order('start_date',{ascending:true});
-      if(error){ console.error(error); return []; }
-      const { start, end } = monthRangeFromKey(state.monthKey);
-      return (data||[]).filter(t => new Date(t.end_date||t.start_date)>=start && new Date(t.start_date)<=end);
+    // ── Data loading ───────────────────────────────────────────────────────────
+    async function loadAllRows(){
+      try{
+        const { data, error } = await supabase
+          .from('tasks')                           // ensure table name is exactly 'tasks'
+          .select('*')                             // columns: id, title, start_date, end_date, progress, notes
+          .order('start_date',{ascending:true});
+        if(error){ console.error(error); showError(error.message, 'Check Supabase URL/key, RLS policy, and table/columns.'); allRows=[]; return; }
+        allRows = data || [];
+        if(!allRows.length){
+          showError('No rows found in table "tasks".', 'Add some rows or pick another month.');
+        } else {
+          clearStatus();
+        }
+      }catch(e){
+        console.error(e);
+        showError(String(e));
+        allRows=[];
+      }
     }
 
-    // Auto-fit so the full range fills the container (no inner slider)
-    function computeColumnWidth(tasks){
-      const el = document.getElementById('gantt');
-      const w = Math.max(640, el.clientWidth - 24);
-      if(!tasks.length) return 38;
-      const min = new Date(Math.min(...tasks.map(t=>new Date(t.start))));
-      const max = new Date(Math.max(...tasks.map(t=>new Date(t.end))));
-      const days = daysBetween(min, max);
-      return Math.min(48, Math.max(22, Math.floor(w / days)));
+    function buildMonthPickerFromData(){
+      const months = new Set(allRows.map(r => keyFromDate(new Date(r.start_date))));
+      // if empty, fallback to current month
+      const list = months.size ? Array.from(months) : [state.monthKey];
+      list.sort(); // ascending
+      monthSelect.innerHTML='';
+      for(const key of list){
+        const [y,m]=key.split('-').map(Number);
+        const d = new Date(y, m-1, 1);
+        const opt = document.createElement('option');
+        opt.value = key;
+        opt.textContent = d.toLocaleString(undefined,{month:'long',year:'numeric'});
+        if(key===state.monthKey) opt.selected=true;
+        monthSelect.appendChild(opt);
+      }
+      // If current month has no data, switch to the last month that has
+      if(!months.has(state.monthKey) && months.size){
+        state.monthKey = Array.from(months).sort().pop();
+        monthSelect.value = state.monthKey;
+      }
     }
 
-    async function render(){
-      const rows = await fetchTasks();
+    async function renderForMonth(monthKey){
       const el = document.getElementById('gantt');
+      const { start, end } = monthRangeFromKey(monthKey);
+      const rows = allRows.filter(t => new Date(t.end_date||t.start_date)>=start && new Date(t.start_date)<=end);
       if(!rows.length){
-        el.innerHTML = '<div style="text-align:center;color:#777;padding:24px">No tasks this month</div>';
+        el.innerHTML = '<div style="text-align:center;color:#777;padding:18px">No tasks in this month.</div>';
         return;
       }
+
       const tasks = rows.map(r=>({
         id:String(r.id),
         name:r.title,
@@ -167,8 +202,14 @@
       }));
       tasksById = Object.fromEntries(tasks.map(t=>[t.id,t]));
 
+      // Compute a column width that fills the container (avoids inner slider)
+      const w = Math.max(640, el.clientWidth - 24);
+      const min = new Date(Math.min(...tasks.map(t=>new Date(t.start))));
+      const max = new Date(Math.max(...tasks.map(t=>new Date(t.end))));
+      const days = daysBetween(min,max);
+      const column_width = Math.min(48, Math.max(22, Math.floor(w/days)));
+
       el.innerHTML='';
-      const column_width = computeColumnWidth(tasks);
       gantt = new Gantt('#gantt', tasks, {
         view_mode: state.view,
         date_format: 'YYYY-MM-DD',
@@ -183,38 +224,7 @@
       attachTooltip();
     }
 
-    async function fitAndRebuild(){
-      const el = document.getElementById('gantt');
-      const rows = await fetchTasks();
-      if(!rows.length){
-        el.innerHTML = '<div style="text-align:center;color:#777;padding:24px">No tasks this month</div>';
-        return;
-      }
-      const tasks = rows.map(r=>({
-        id:String(r.id),
-        name:r.title,
-        start:toYMD(r.start_date),
-        end:toYMD(r.end_date||r.start_date),
-        progress:Number(r.progress||0),
-        notes:r.notes||''
-      }));
-      tasksById = Object.fromEntries(tasks.map(t=>[t.id,t]));
-      el.innerHTML='';
-      const column_width = computeColumnWidth(tasks);
-      gantt = new Gantt('#gantt', tasks, {
-        view_mode:state.view,
-        date_format:'YYYY-MM-DD',
-        bar_height:28,
-        padding:24,
-        column_width
-      });
-      applyColors();
-      setTimeout(applyColors, 60);
-      setTimeout(applyColors, 160);
-      attachTooltip();
-    }
-
-    // Colours match legend
+    // ── Colours (force to match legend) ────────────────────────────────────────
     function applyColors(){
       document.querySelectorAll('#gantt .bar-wrapper').forEach(w=>{
         const t = tasksById[w.getAttribute('data-id')]; if(!t) return;
@@ -231,15 +241,9 @@
         else { setFill(base, css('--doing')); setFill(prog, beigeRamp(p)); }
       });
     }
+    function beigeRamp(p){ const h=38, s=70, lStart=90, lEnd=55; const l = lStart + (lEnd - lStart) * (p / 100); return `hsl(${h}, ${s}%, ${l}%)`; }
 
-    // Warm beige ramp for 1–99%
-    function beigeRamp(p){
-      const h=38, s=70, lStart=90, lEnd=55;
-      const l = lStart + (lEnd - lStart) * (p / 100);
-      return `hsl(${h}, ${s}%, ${l}%)`;
-    }
-
-    // Tooltip
+    // ── Tooltip ────────────────────────────────────────────────────────────────
     function attachTooltip(){
       const tip = document.getElementById('tip');
       document.querySelectorAll('#gantt .bar-wrapper').forEach(w=>{
@@ -252,10 +256,9 @@
         w.onmouseleave = () => { tip.style.display='none'; };
       });
     }
-    function escapeHtml(s){
-      return String(s).replace(/[&<>\"']/g,
-        c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]));
-    }
+
+    // ── Utils ─────────────────────────────────────────────────────────────────
+    function escapeHtml(s){ return String(s).replace(/[&<>\"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c])); }
   </script>
 </body>
 </html>
