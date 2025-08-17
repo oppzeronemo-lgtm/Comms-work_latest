@@ -128,6 +128,21 @@
   <div id="tip" class="tip"></div>
 
 <script>
+  // ── Helpers to get elements safely
+  const $ = (id) => document.getElementById(id);
+  const monthInput = $('monthInput');
+  const weekSelect = $('weekSelect');
+  const weekField  = $('weekField');
+  const dayField   = $('dayField');
+  const dayInput   = $('dayInput');
+  const viewMonth  = $('viewMonth');
+  const viewWeek   = $('viewWeek');
+  const viewDay    = $('viewDay');
+  const prevBtn    = $('prevBtn');
+  const nextBtn    = $('nextBtn');
+  const todayBtn   = $('todayBtn');
+  const refreshBtn = $('refreshBtn');
+
   // ── Supabase ────────────────────────────────────────────────────────────────
   const SUPABASE_URL = "https://wjfgntocqjtwaqamlbgc.supabase.co";
   const SUPABASE_ANON_KEY =
@@ -167,7 +182,6 @@
 
     monthInput.addEventListener('change', ()=>{
       state.monthKey = monthInput.value;
-      // reset week/day inside that month
       const [yy,mm] = state.monthKey.split('-').map(Number);
       state.dayDate = new Date(yy, mm-1, 1);
       state.weekIndex = 0;
@@ -186,9 +200,7 @@
   }
 
   function initPickers(){
-    // Month picker default = current state
     monthInput.value = state.monthKey;
-    // Day picker default = today
     dayInput.value = toInputDate(state.dayDate);
   }
 
@@ -198,7 +210,6 @@
     if(state.view==='Week')  viewWeek.classList.add('active');
     if(state.view==='Day')   viewDay.classList.add('active');
 
-    // show/hide contextual pickers
     weekField.style.display = (state.view==='Week') ? 'flex' : 'none';
     dayField.style.display  = (state.view==='Day')  ? 'flex' : 'none';
   }
@@ -271,7 +282,7 @@
     buildHead(range);
     buildGrid(range);
 
-    document.getElementById('timeline').style.display='grid';
+    $('timeline').style.display='grid';
     updateRangeTitle(range);
   }
 
@@ -282,9 +293,17 @@
     daysInMonth= monthEnd.getDate();
     weeks = getWeeksInMonth(monthStart);
     clampWeekIndex();
-    // keep day inside visible month
     if(state.dayDate < monthStart) state.dayDate = new Date(monthStart);
     if(state.dayDate > monthEnd)   state.dayDate = new Date(monthEnd);
+  }
+
+  // ✅ the missing helper that caused your error
+  function clampWeekIndex(){
+    if(!Array.isArray(weeks) || weeks.length===0){
+      weeks = [{start:monthStart, end:monthEnd}];
+    }
+    if(state.weekIndex < 0) state.weekIndex = 0;
+    if(state.weekIndex >= weeks.length) state.weekIndex = weeks.length - 1;
   }
 
   function buildWeeksDropdown(){
@@ -314,7 +333,7 @@
 
   // ── Header builders ─────────────────────────────────────────────────────────
   function buildHead(range){
-    const head = document.getElementById('head');
+    const head = $('head');
     head.innerHTML = '';
     const labelCol = '260px';
 
@@ -364,7 +383,7 @@
 
   // ── Grid / Bars ─────────────────────────────────────────────────────────────
   function buildGrid(range){
-    const grid = document.getElementById('grid');
+    const grid = $('grid');
     grid.innerHTML = '';
     const labelCol = '260px';
     if(state.view==='Month'){
@@ -375,7 +394,6 @@
       grid.style.gridTemplateColumns = `${labelCol} repeat(24, 1fr)`;
     }
 
-    // rows
     for(const t of tasks){
       const label = document.createElement('div');
       label.className = 'task-label';
@@ -384,9 +402,8 @@
 
       const wrap = document.createElement('div');
       wrap.className = 'task-bar-wrap';
-      wrap.style.gridColumn = `2 / -1`; // span all timeline columns
+      wrap.style.gridColumn = `2 / -1`;
 
-      // intersection with the visible range
       const a = maxDate(range.start, t.start);
       const b = minDate(range.end,   t.end);
       if(b < a){ grid.appendChild(wrap); continue; }
@@ -396,7 +413,6 @@
       let leftPct = 0, widthPct = 0;
 
       if(state.view==='Day'){
-        // hours within the day (inclusive)
         const sHour = isSameDay(a, state.dayDate) ? a.getHours() : 0;
         const eHour = isSameDay(b, state.dayDate) ? b.getHours() : 23;
         leftPct  = (sHour / 24) * 100;
@@ -409,7 +425,6 @@
         widthPct = (spanUnits / totalUnits) * 100;
       }
 
-      // ensure visible even for 1 unit
       widthPct = Math.max(widthPct, (1/totalUnits)*100);
 
       const bar  = document.createElement('div');
@@ -432,11 +447,10 @@
         prog.style.background = beigeRamp(t.progress);
       }
 
-      // tooltip
       bar.addEventListener('mouseenter', e => showTip(e, t));
       bar.addEventListener('mousemove',  e => moveTip(e));
       bar.addEventListener('mouseleave', () => hideTip());
-      bar.addEventListener('click',      e => { const tip=document.getElementById('tip'); if(tip.style.display==='block'){hideTip();} else {showTip(e,t);} });
+      bar.addEventListener('click',      e => { const tip=$('tip'); if(tip.style.display==='block'){hideTip();} else {showTip(e,t);} });
 
       bar.appendChild(prog);
       wrap.appendChild(bar);
@@ -446,7 +460,7 @@
 
   // ── Range title ─────────────────────────────────────────────────────────────
   function updateRangeTitle(range){
-    const el = document.getElementById('rangeTitle');
+    const el = $('rangeTitle');
     if(state.view==='Month'){
       el.textContent = monthStart.toLocaleString(undefined,{month:'long',year:'numeric'});
     } else if(state.view==='Week'){
@@ -469,31 +483,29 @@
   function dayBounds(d){ const s = new Date(d.getFullYear(), d.getMonth(), d.getDate()); const e = new Date(s); e.setHours(23,59,59,999); return {start:s, end:e}; }
   function toInputDate(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
 
-  // Weeks start on Monday and cover the whole month.
   function getWeeksInMonth(firstOfMonth){
     const out = [];
     const year = firstOfMonth.getFullYear();
     const month= firstOfMonth.getMonth();
     let cursor = new Date(year, month, 1);
-    const dow = (cursor.getDay()+6)%7; // Sun=0 -> 6; Mon=1 -> 0
+    const dow = (cursor.getDay()+6)%7; // Mon=0
     cursor.setDate(cursor.getDate() - dow); // back to Monday
 
-    const monthEnd = new Date(year, month+1, 0, 23, 59, 59, 999);
-    while(cursor <= monthEnd || out.length===0){
+    const mEnd = new Date(year, month+1, 0, 23, 59, 59, 999);
+    while(cursor <= mEnd || out.length===0){
       const start = new Date(cursor);
       const end   = new Date(cursor); end.setDate(end.getDate()+6);
       const range = {
         start: new Date(Math.max(start, new Date(year,month,1))),
-        end:   new Date(Math.min(end,   monthEnd))
+        end:   new Date(Math.min(end,   mEnd))
       };
       out.push(range);
       cursor.setDate(cursor.getDate()+7);
-      if(out.length>6) break; // safety
+      if(out.length>6) break;
     }
     return out;
   }
 
-  // Progressive warm beige ramp (1–99%)
   function beigeRamp(p){
     const h=38, s=70, lStart=90, lEnd=55;
     const l = lStart + (lEnd - lStart) * (p/100);
@@ -502,32 +514,28 @@
 
   // Tooltip
   function showTip(e,t){
-    const tip = document.getElementById('tip');
+    const tip = $('tip');
     tip.innerHTML = `<strong>${escapeHtml(t.name)}</strong><br>${fmtYMD(t.start)} → ${fmtYMD(t.end)}<br>${t.progress}%${t.notes?`<br>${escapeHtml(t.notes)}`:''}`;
     tip.style.display='block';
     moveTip(e);
   }
-  function moveTip(e){
-    const tip = document.getElementById('tip');
-    tip.style.left = (e.clientX) + 'px';
-    tip.style.top  = (e.clientY - 10) + 'px';
-  }
-  function hideTip(){ document.getElementById('tip').style.display='none'; }
+  function moveTip(e){ const tip=$('tip'); tip.style.left=(e.clientX)+'px'; tip.style.top=(e.clientY-10)+'px'; }
+  function hideTip(){ $('tip').style.display='none'; }
   function escapeHtml(s){ return String(s).replace(/[&<>\"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c])); }
   function fmtYMD(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
 
   // ── Status helpers ──────────────────────────────────────────────────────────
   function showSpinner(msg='Loading tasks…'){
-    const s = document.getElementById('statusArea');
+    const s = $('statusArea');
     s.className = 'spinner'; s.textContent = msg;
   }
   function showError(message, hint=''){
-    const el = document.getElementById('statusArea');
+    const el = $('statusArea');
     el.className = 'banner error';
     el.innerHTML = `<strong>Error:</strong> ${escapeHtml(message)}${hint?`<br><small>${escapeHtml(hint)}</small>`:''}`;
-    document.getElementById('timeline').style.display = 'none';
+    $('timeline').style.display = 'none';
   }
-  function clearStatus(){ const el=document.getElementById('statusArea'); el.className=''; el.innerHTML=''; }
+  function clearStatus(){ const el=$('statusArea'); el.className=''; el.innerHTML=''; }
 </script>
 </body>
 </html>
